@@ -139,6 +139,14 @@ describe("Claude usage limits endpoint", () => {
           usedPercent: 100,
           resetsAt: "2026-11-03T01:00:00.493Z",
         },
+        {
+          id: "seven_day_fable",
+          kind: "weekly",
+          label: "Weekly · Fable",
+          windowDurationMins: 10080,
+          usedPercent: 2,
+          resetsAt: "2026-11-03T01:00:00.493Z",
+        },
       ]);
     }),
   );
@@ -159,6 +167,7 @@ describe("Claude usage limits endpoint", () => {
       expect(capabilities.usageLimits?.windows.map((window) => window.id)).toEqual([
         "five_hour",
         "seven_day",
+        "seven_day_fable",
       ]);
     }),
   );
