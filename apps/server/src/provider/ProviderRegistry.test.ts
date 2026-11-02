@@ -32,7 +32,6 @@ import {
   ServerSettings,
   ServerSettingsError,
   ServerProvider,
-  type ServerProviderSlashCommand,
   type ServerSettings as ContractServerSettings,
 } from "@t3tools/contracts";
 import { HttpClient, HttpClientResponse } from "effect/http";
@@ -43,7 +42,7 @@ import { createModelCapabilities } from "@t3tools/shared/model";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
 import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
-import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
+import { checkClaudeProviderStatus, type ClaudeCapabilitiesProbe } from "./ClaudeProvider.ts";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as AntigravityInstallation from "./AntigravityInstallation.ts";
 import * as ModelManifest from "./ModelManifest.ts";
@@ -167,14 +166,11 @@ function booleanDescriptor(id: string, label: string) {
   };
 }
 
-type TestClaudeCapabilities = {
-  readonly email: string | undefined;
-  readonly subscriptionType: string | undefined;
-  readonly tokenSource: string | undefined;
-  readonly apiKeySource: string | undefined;
-  readonly apiProvider: string | undefined;
-  readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
-};
+type TestClaudeCapabilities = Pick<
+  ClaudeCapabilitiesProbe,
+  "email" | "subscriptionType" | "tokenSource" | "apiKeySource" | "apiProvider" | "slashCommands"
+> &
+  Partial<Pick<ClaudeCapabilitiesProbe, "usage" | "usageCheckedAt" | "usageLimits">>;
 
 function claudeCapabilities(overrides: Partial<TestClaudeCapabilities> = {}) {
   return () =>
@@ -2858,6 +2854,82 @@ it.layer(
         );
         assert.strictEqual(status.status, "ready");
         assert.strictEqual(status.auth.status, "authenticated");
+      }).pipe(
+        Effect.provide(
+          layerMockSpawner((args) => {
+            const joined = args.join(" ");
+            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
+            throw new Error(`Unexpected args: ${joined}`);
+          }),
+        ),
+      ),
+    );
+
+    it.effect(
+      "publishes the limits a quota endpoint reported instead of the CLI's empty ones",
+      () =>
+        Effect.gen(function* () {
+          const window = {
+            id: "seven_day",
+            kind: "weekly" as const,
+            label: "Weekly",
+            windowDurationMins: 10080,
+            usedPercent: 100,
+            resetsAt: "2026-11-03T01:00:00.493Z",
+          };
+          const status = yield* checkClaudeProviderStatus(
+            defaultClaudeSettings,
+            claudeCapabilities({
+              tokenSource: "ANTHROPIC_API_KEY",
+              apiKeySource: "ANTHROPIC_API_KEY",
+              usage: { rate_limits_available: false, rate_limits: null },
+              usageLimits: { checkedAt: "2026-11-02T18:00:00.000Z", windows: [window] },
+            }),
+          );
+          assert.deepStrictEqual(status.usageLimits, {
+            checkedAt: "2026-11-02T18:00:00.000Z",
+            windows: [window],
+          });
+        }).pipe(
+          Effect.provide(
+            layerMockSpawner((args) => {
+              const joined = args.join(" ");
+              if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
+              throw new Error(`Unexpected args: ${joined}`);
+            }),
+          ),
+        ),
+    );
+
+    it.effect("does not offer local reset credits for quota-endpoint limits", () =>
+      Effect.gen(function* () {
+        let resolverCalls = 0;
+        const status = yield* checkClaudeProviderStatus(
+          defaultClaudeSettings,
+          claudeCapabilities({
+            tokenSource: "ANTHROPIC_API_KEY",
+            apiKeySource: "ANTHROPIC_API_KEY",
+            // A machine that still holds an OAuth login reports a plan beside the proxy's windows.
+            subscriptionType: "max",
+            usage: { rate_limits_available: false, rate_limits: null },
+            usageLimits: {
+              checkedAt: "2026-11-02T18:00:00.000Z",
+              windows: [{ id: "seven_day", kind: "weekly", label: "Weekly", usedPercent: 100 }],
+            },
+          }),
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          () =>
+            Effect.sync(() => {
+              resolverCalls += 1;
+              return { availableCount: 1 };
+            }),
+        );
+        // Those credits redeem on the local Anthropic login, not on the proxy's pool.
+        assert.strictEqual(resolverCalls, 0);
+        assert.strictEqual(status.usageLimits?.resetCredits, undefined);
       }).pipe(
         Effect.provide(
           layerMockSpawner((args) => {

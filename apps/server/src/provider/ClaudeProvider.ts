@@ -4,6 +4,7 @@ import {
   type ServerProvider,
   type ServerProviderSlashCommand,
   type ServerProviderResetCredits,
+  type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
@@ -13,6 +14,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -39,9 +41,15 @@ import { resolveClaudeSdkExecutablePath } from "./Drivers/ClaudeExecutable.ts";
 import { hasClaudeManagedMcpConfig, makeClaudeEnvironment } from "./Drivers/ClaudeHome.ts";
 import { discoverClaudeSkills, readClaudeSettingsEnv } from "./Drivers/ClaudeSkills.ts";
 import type { ProviderWorkspaceSnapshot } from "@t3tools/provider-core/server/driver";
-import { makeUnavailableUsageLimits } from "@t3tools/provider-core/server/usageLimits";
+import {
+  makeUnavailableUsageLimits,
+  makeUsageLimits,
+} from "@t3tools/provider-core/server/usageLimits";
 import {
   type ClaudeScopedLimitNames,
+  claudeProxyOrigin,
+  claudeQuotaEndpoint,
+  claudeQuotaResponseToWindows,
   claudeUsageResponseToLimits,
   recordClaudeUsageResponse,
 } from "./claudeUsageLimits.ts";
@@ -244,6 +252,8 @@ export type ClaudeCapabilitiesProbe = {
   /** Undefined means get_usage failed; absent windows on success mean no subscription windows, as with API keys. */
   readonly usage?: Pick<SDKControlGetUsageResponse, "rate_limits_available" | "rate_limits">;
   readonly usageCheckedAt?: string;
+  /** Limits read from a Claude quota endpoint instead of the CLI, which reports none for API keys. */
+  readonly usageLimits?: ServerProviderUsageLimits;
 };
 
 function parseClaudeInitializationCommands(
@@ -318,6 +328,67 @@ function waitForAbortSignal(signal: AbortSignal): Promise<void> {
   });
 }
 
+const MANUAL_REDIRECT: RequestInit = { redirect: "manual" };
+
+/**
+ * Limits for a session the CLI reports none for: an explicit URL, or a teamclaude proxy found
+ * behind ANTHROPIC_BASE_URL. Only an explicit URL surfaces a failure; discovery stays silent.
+ */
+const probeClaudeUsageLimits = Effect.fn("ClaudeProvider.probeClaudeUsageLimits")(
+  function* (input: {
+    readonly settings: ClaudeSettings;
+    readonly environment: NodeJS.ProcessEnv;
+    readonly cliUsage: ClaudeCapabilitiesProbe["usage"];
+    readonly checkedAt: string;
+  }): Effect.fn.Return<ServerProviderUsageLimits | undefined, never, HttpClient.HttpClient> {
+    const explicitUrl = input.settings.usageLimitsUrl.trim();
+    const url =
+      explicitUrl ||
+      (input.cliUsage !== undefined && !input.cliUsage.rate_limits_available
+        ? claudeQuotaEndpoint(input.environment.ANTHROPIC_BASE_URL)
+        : undefined);
+    if (url === undefined) return undefined;
+    const unavailable = (message: string) =>
+      makeUnavailableUsageLimits({ checkedAt: input.checkedAt, reason: "probeFailed", message });
+    const apiKey = input.environment.ANTHROPIC_API_KEY?.trim();
+    if (!apiKey) {
+      return explicitUrl
+        ? unavailable("Claude usage limits need ANTHROPIC_API_KEY on this instance.")
+        : undefined;
+    }
+    const client = yield* HttpClient.HttpClient;
+    // Usage is an enrichment: a bad endpoint degrades the snapshot, it never fails the probe.
+    const body = yield* client
+      .execute(
+        HttpClientRequest.get(url).pipe(
+          HttpClientRequest.setHeaders({ accept: "application/json", "x-api-key": apiKey }),
+        ),
+      )
+      .pipe(
+        // A redirect would carry x-api-key to whatever host the Location names.
+        Effect.provideService(FetchHttpClient.RequestInit, MANUAL_REDIRECT),
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.flatMap((response) => response.json),
+        Effect.timeout(DEFAULT_TIMEOUT_MS),
+        Effect.result,
+      );
+    const windows = Result.isSuccess(body) ? claudeQuotaResponseToWindows(body.success) : undefined;
+    if (windows === undefined) {
+      return explicitUrl
+        ? unavailable("The usage limits URL did not answer with teamclaude quota JSON.")
+        : undefined;
+    }
+    // Discovery accepts only an answer that carries a readable bucket; an explicit URL that
+    // reports none is a configuration problem the operator has to see.
+    if (windows.length === 0) {
+      return explicitUrl
+        ? unavailable("The usage limits URL reported no readable windows.")
+        : undefined;
+    }
+    return makeUsageLimits({ checkedAt: input.checkedAt, windows });
+  },
+);
+
 /** A never-yielding prompt allows local initialization IPC without sending an Anthropic request. */
 const probeClaudeCapabilities = (
   claudeSettings: ClaudeSettings,
@@ -348,28 +419,40 @@ const probeClaudeCapabilities = (
         }),
       });
       const init = await q.initializationResult();
-      return { q, init };
+      return { q, init, claudeEnvironment };
     });
   }).pipe(
     Effect.timeout(CAPABILITIES_PROBE_TIMEOUT_MS),
-    Effect.flatMap(({ q, init }) =>
+    Effect.flatMap(({ q, init, claudeEnvironment }) =>
       Effect.gen(function* () {
         // Usage has its own deadline so a slow optional request cannot discard initialization.
         // Only the rate limits are read, so skip the local transcript scan that fills
         // `behaviors`: with a few GB of transcripts it outlasts the deadline.
         const usageCheckedAt = DateTime.formatIso(yield* DateTime.now);
-        const usageResult = includeUsage
-          ? yield* Effect.tryPromise(() =>
-              q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
-            ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result)
-          : undefined;
+        const cliUsage =
+          includeUsage && claudeSettings.usageLimitsUrl.trim().length === 0
+            ? yield* Effect.tryPromise(() =>
+                q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
+                  skipBehaviors: true,
+                }),
+              ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result)
+            : undefined;
         const usage =
-          usageResult && Result.isSuccess(usageResult)
+          cliUsage && Result.isSuccess(cliUsage)
             ? {
-                rate_limits_available: usageResult.success.rate_limits_available,
-                rate_limits: usageResult.success.rate_limits,
+                rate_limits_available: cliUsage.success.rate_limits_available,
+                rate_limits: cliUsage.success.rate_limits,
               }
             : undefined;
+        // A teamclaude proxy knows the quota a CLI run with an API key reports as unavailable.
+        const usageLimits = includeUsage
+          ? yield* probeClaudeUsageLimits({
+              settings: claudeSettings,
+              environment: claudeEnvironment,
+              cliUsage: usage,
+              checkedAt: usageCheckedAt,
+            })
+          : undefined;
         const account = init.account as
           | {
               readonly email?: string;
@@ -387,6 +470,7 @@ const probeClaudeCapabilities = (
           apiProvider: account?.apiProvider,
           slashCommands: parseClaudeInitializationCommands(init.commands),
           ...(usage ? { usage, usageCheckedAt } : {}),
+          ...(usageLimits ? { usageLimits } : {}),
         } satisfies ClaudeCapabilitiesProbe;
       }),
     ),
@@ -426,7 +510,11 @@ export const probeClaudeWorkspaceSnapshot = Effect.fn("probeClaudeWorkspaceSnaps
   machineSnapshot: ServerProvider,
   cwd: string,
   environment?: NodeJS.ProcessEnv,
-): Effect.fn.Return<ProviderWorkspaceSnapshot, never, FileSystem.FileSystem | Path.Path> {
+): Effect.fn.Return<
+  ProviderWorkspaceSnapshot,
+  never,
+  FileSystem.FileSystem | HttpClient.HttpClient | Path.Path
+> {
   if (!claudeSettings.enabled) return machineSnapshot;
   const skills = yield* discoverClaudeSkills(claudeSettings, cwd, environment);
   const fileSystem = yield* FileSystem.FileSystem;
@@ -603,12 +691,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   const baseUrl =
     (yield* readClaudeSettingsEnv(claudeSettings, cwd, resolvedEnvironment)).ANTHROPIC_BASE_URL ??
     resolvedEnvironment.ANTHROPIC_BASE_URL;
-  const endpoint = URL.parse(baseUrl?.trim() ?? "");
-  const customApiEndpoint =
-    endpoint !== null &&
-    (endpoint.protocol === "http:" || endpoint.protocol === "https:") &&
-    endpoint.hostname !== "" &&
-    endpoint.hostname !== "api.anthropic.com";
+  const customApiEndpoint = claudeProxyOrigin(baseUrl) !== undefined;
   if (!customApiEndpoint && claudeAuthStatus(capabilities) === "unauthenticated") {
     return buildServerProvider({
       presentation: CLAUDE_PRESENTATION,
@@ -637,19 +720,31 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       authMethod: capabilities.tokenSource,
     });
   const usageCheckedAt = capabilities.usageCheckedAt ?? checkedAt;
-  const usageLimits = !capabilities.usage
-    ? makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" })
-    : scopedLimitNames
+  const externalLimits = capabilities.usageLimits;
+  // An OAuth CLI still streams mid-turn buckets, so its scoped names must be recorded even when
+  // the published windows come from the quota endpoint.
+  const usageLimits =
+    externalLimits !== undefined && capabilities.usage !== undefined && scopedLimitNames
       ? yield* recordClaudeUsageResponse(scopedLimitNames, {
           response: capabilities.usage,
           checkedAt: usageCheckedAt,
-        })
-      : claudeUsageResponseToLimits({
-          response: capabilities.usage,
-          checkedAt: usageCheckedAt,
-        }).limits;
+        }).pipe(Effect.as(externalLimits))
+      : (externalLimits ??
+        (!capabilities.usage
+          ? makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" })
+          : scopedLimitNames
+            ? yield* recordClaudeUsageResponse(scopedLimitNames, {
+                response: capabilities.usage,
+                checkedAt: usageCheckedAt,
+              })
+            : claudeUsageResponseToLimits({
+                response: capabilities.usage,
+                checkedAt: usageCheckedAt,
+              }).limits));
+  // Reset credits belong to a local Anthropic login; they cannot reset the proxy's pool.
   const resetCredits =
     resolveResetCredits &&
+    externalLimits === undefined &&
     capabilities.subscriptionType &&
     !usageLimits.unavailable &&
     parsedVersion

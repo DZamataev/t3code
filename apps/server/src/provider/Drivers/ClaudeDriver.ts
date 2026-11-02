@@ -69,6 +69,7 @@ const CAPABILITIES_PROBE_TTL = Duration.minutes(5);
 const withoutUsage = (capabilities: ClaudeCapabilitiesProbe): ClaudeCapabilitiesProbe => {
   const result = { ...capabilities };
   delete result.usage;
+  delete result.usageLimits;
   return result;
 };
 
@@ -234,14 +235,17 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
           ),
           Effect.provideService(FileSystem.FileSystem, fileSystem),
           Effect.provideService(Path.Path, path),
+          Effect.provideService(HttpClient.HttpClient, httpClient),
         ),
       {
         capacity: 1,
         timeToLive: (exit) =>
-          // Only fresh usage earns the TTL; failures, fallbacks and usage-less probes retry.
+          // Only fresh usage or readable limits earn the TTL; failures, fallbacks and usage-less probes retry.
           Exit.isSuccess(exit) &&
           exit.value._tag === "fresh" &&
-          exit.value.capabilities.usage !== undefined
+          (exit.value.capabilities.usage !== undefined ||
+            (exit.value.capabilities.usageLimits !== undefined &&
+              exit.value.capabilities.usageLimits.unavailable === undefined))
             ? CAPABILITIES_PROBE_TTL
             : Duration.zero,
       },
@@ -404,6 +408,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
           ),
           Effect.provideService(FileSystem.FileSystem, fileSystem),
           Effect.provideService(Path.Path, path),
+          Effect.provideService(HttpClient.HttpClient, httpClient),
         ),
       orchestrationAdapter,
       textGeneration,

@@ -171,6 +171,11 @@ or endpoint configurations do not report subscription limits.
 API-key accounts may not report subscription limits. This also applies to Claude connections
 using a proxy through `ANTHROPIC_AUTH_TOKEN`.
 
+When Claude reports no limits, T3 can read them from a quota endpoint. Set **Usage limits URL**
+on the Claude instance, or leave it empty and T3 probes `/teamclaude/quota` on the
+`ANTHROPIC_BASE_URL` host when that host answers like a teamclaude proxy. The endpoint needs the
+instance's `ANTHROPIC_API_KEY`.
+
 ## Connect a CLIProxyAPI hub
 
 To see pooled accounts, open **Settings → Providers → Usage providers → Add hub**. Choose the
