@@ -109,12 +109,19 @@ export const makeClaudeContinuationGroupKey = Effect.fn("makeClaudeContinuationG
 
 export const makeClaudeCapabilitiesCacheKey = Effect.fn("makeClaudeCapabilitiesCacheKey")(
   function* (
-    config: Pick<ClaudeSettings, "binaryPath" | "homePath">,
+    config: Pick<ClaudeSettings, "binaryPath" | "homePath" | "usageLimitsUrl">,
     cwd?: string,
     environment?: NodeJS.ProcessEnv,
   ): Effect.fn.Return<string, never, Path.Path> {
     const resolvedHomePath = yield* resolveClaudeHomePath(config, environment);
-    return `${config.binaryPath}\0${resolvedHomePath}\0${cwd ?? ""}`;
+    // The probe's limits depend on the quota URL and endpoint, so a settings change must miss.
+    return [
+      config.binaryPath,
+      resolvedHomePath,
+      cwd ?? "",
+      config.usageLimitsUrl.trim(),
+      environment?.ANTHROPIC_BASE_URL?.trim() ?? "",
+    ].join("\0");
   },
 );
 

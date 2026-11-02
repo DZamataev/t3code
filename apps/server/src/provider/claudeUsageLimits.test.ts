@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { claudeRateLimitEventToUpdate, claudeUsageResponseToLimits } from "./claudeUsageLimits.ts";
+import {
+  claudeProxyOrigin,
+  claudeQuotaEndpoint,
+  claudeQuotaResponseToWindows,
+  claudeRateLimitEventToUpdate,
+  claudeUsageResponseToLimits,
+} from "./claudeUsageLimits.ts";
 
 const checkedAt = "2026-07-18T10:00:00.000Z";
 const noNames = { overageIncluded: undefined } as const;
@@ -220,6 +226,216 @@ describe("claudeUsageResponseToLimits", () => {
       limit: { ...rateLimits.spend.limit, amount_minor: 0 },
     };
     expect(claudeUsageResponseToLimits({ checkedAt, response }).limits.windows).toEqual([]);
+  });
+});
+
+const LIVE_QUOTA = {
+  aggregate: {
+    fiveHour: null,
+    weeklyShared: {
+      capacityWeight: 20,
+      usedWeight: 20,
+      remainingWeight: 0,
+      utilization: 1,
+      remaining: 0,
+      knownAccounts: 1,
+      nextResetAt: 1_793_667_600_493,
+    },
+    weeklySonnet: {
+      capacityWeight: 20,
+      usedWeight: 20,
+      remainingWeight: 0,
+      utilization: 1,
+      remaining: 0,
+      knownAccounts: 1,
+      nextResetAt: 1_793_667_600_493,
+    },
+    weeklyFable: {
+      capacityWeight: 20,
+      usedWeight: 0.4,
+      remainingWeight: 19.6,
+      utilization: 0.02,
+      remaining: 0.98,
+      knownAccounts: 1,
+      nextResetAt: 1_793_667_600_493,
+    },
+  },
+  accounts: [],
+  unknownTiers: [],
+  warmup: {},
+};
+
+describe("claudeQuotaResponseToWindows", () => {
+  it("maps the live teamclaude payload onto the session and weekly windows it reports", () => {
+    expect(claudeQuotaResponseToWindows(LIVE_QUOTA)).toEqual([
+      {
+        id: "seven_day",
+        kind: "weekly",
+        label: "Weekly",
+        windowDurationMins: 10080,
+        usedPercent: 100,
+        resetsAt: "2026-11-03T01:00:00.493Z",
+      },
+      {
+        id: "seven_day_sonnet",
+        kind: "weekly",
+        label: "Weekly · Sonnet",
+        windowDurationMins: 10080,
+        usedPercent: 100,
+        resetsAt: "2026-11-03T01:00:00.493Z",
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      name: "scales the 0-1 fraction and the epoch-millisecond reset",
+      aggregate: { fiveHour: { utilization: 0.523, nextResetAt: 1_793_667_600_493 } },
+      expected: [
+        {
+          id: "five_hour",
+          kind: "session",
+          label: "Session",
+          windowDurationMins: 300,
+          usedPercent: 52.3,
+          resetsAt: "2026-11-03T01:00:00.493Z",
+        },
+      ],
+    },
+    {
+      name: "keeps a just-short-of-full window below the exhaustion threshold",
+      // Exhaustion is exact (>=100) downstream, and a rounded 100 would make agents wait a week.
+      aggregate: { fiveHour: { utilization: 0.9995 }, weeklyShared: { utilization: 1 } },
+      expected: [
+        {
+          id: "five_hour",
+          kind: "session",
+          label: "Session",
+          windowDurationMins: 300,
+          usedPercent: 99.9,
+        },
+        {
+          id: "seven_day",
+          kind: "weekly",
+          label: "Weekly",
+          windowDurationMins: 10080,
+          usedPercent: 100,
+        },
+      ],
+    },
+    {
+      name: "keeps a window whose bucket reports no reset time",
+      aggregate: { weeklyShared: { utilization: 0.4, nextResetAt: null } },
+      expected: [
+        {
+          id: "seven_day",
+          kind: "weekly",
+          label: "Weekly",
+          windowDurationMins: 10080,
+          usedPercent: 40,
+        },
+      ],
+    },
+    {
+      name: "omits a null bucket instead of reporting it as unused",
+      aggregate: { fiveHour: null, weeklySonnet: { utilization: 0.25 } },
+      expected: [
+        {
+          id: "seven_day_sonnet",
+          kind: "weekly",
+          label: "Weekly · Sonnet",
+          windowDurationMins: 10080,
+          usedPercent: 25,
+        },
+      ],
+    },
+    {
+      name: "clamps utilization to 0-100 and drops a non-finite one",
+      aggregate: {
+        fiveHour: { utilization: 1.5 },
+        weeklyShared: { utilization: -0.5 },
+        weeklySonnet: { utilization: null },
+      },
+      expected: [
+        {
+          id: "five_hour",
+          kind: "session",
+          label: "Session",
+          windowDurationMins: 300,
+          usedPercent: 100,
+        },
+        {
+          id: "seven_day",
+          kind: "weekly",
+          label: "Weekly",
+          windowDurationMins: 10080,
+          usedPercent: 0,
+        },
+      ],
+    },
+    {
+      name: "ignores a field of the wrong type instead of rejecting the payload",
+      aggregate: {
+        fiveHour: { utilization: "half" },
+        weeklyShared: { utilization: 0.4, nextResetAt: "soon" },
+        weeklySonnet: { utilization: Number.NaN, nextResetAt: -1 },
+      },
+      expected: [
+        {
+          id: "seven_day",
+          kind: "weekly",
+          label: "Weekly",
+          windowDurationMins: 10080,
+          usedPercent: 40,
+        },
+      ],
+    },
+  ])("$name", ({ aggregate, expected }) => {
+    expect(
+      claudeQuotaResponseToWindows({
+        aggregate: { fiveHour: null, weeklyShared: null, weeklySonnet: null, ...aggregate },
+        accounts: [],
+      }),
+    ).toEqual(expected);
+  });
+
+  it.each([
+    { name: "an empty body", body: {} },
+    { name: "a list", body: [] },
+    { name: "an HTML page", body: "<html>not found</html>" },
+    { name: "a null aggregate", body: { aggregate: null } },
+    { name: "another endpoint's JSON", body: { data: [] } },
+    // Without a known bucket the body is not identifiable as teamclaude's quota answer.
+    { name: "an aggregate without known buckets", body: { aggregate: {} } },
+    { name: "an aggregate of unrelated keys", body: { aggregate: { unrelated: 1 } } },
+  ])("reports $name as no quota payload", ({ body }) => {
+    expect(claudeQuotaResponseToWindows(body)).toBeUndefined();
+  });
+
+  it("reports a known bucket with no readable values as no windows", () => {
+    expect(claudeQuotaResponseToWindows({ aggregate: { weeklyShared: {} } })).toEqual([]);
+  });
+});
+
+describe("claudeProxyOrigin", () => {
+  it.each([
+    { baseUrl: "https://teamclaude.example/api", origin: "https://teamclaude.example" },
+    { baseUrl: "http://localhost:8080/v1", origin: "http://localhost:8080" },
+    { baseUrl: "https://api.anthropic.com", origin: undefined },
+    { baseUrl: "https://api.anthropic.com:443/v1", origin: undefined },
+    { baseUrl: "ftp://proxy.example", origin: undefined },
+    { baseUrl: "localhost:8080", origin: undefined },
+    { baseUrl: "", origin: undefined },
+    { baseUrl: undefined, origin: undefined },
+  ])("reads the proxy origin of $baseUrl", ({ baseUrl, origin }) => {
+    expect(claudeProxyOrigin(baseUrl)).toBe(origin);
+  });
+
+  it("puts the quota path on the proxy origin, not on the configured base path", () => {
+    expect(claudeQuotaEndpoint("https://teamclaude.example/anthropic/v1")).toBe(
+      "https://teamclaude.example/teamclaude/quota",
+    );
+    expect(claudeQuotaEndpoint("https://api.anthropic.com")).toBeUndefined();
   });
 });
 

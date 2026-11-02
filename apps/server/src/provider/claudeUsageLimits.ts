@@ -223,3 +223,103 @@ export const recordClaudeUsageResponse = (
   const { limits, names } = claudeUsageResponseToLimits(input);
   return Ref.set(namesRef, names).pipe(Effect.as(limits));
 };
+
+/** Origin of a non-Anthropic Claude endpoint; undefined for Anthropic's own API or an unusable URL. */
+export function claudeProxyOrigin(baseUrl: string | undefined): string | undefined {
+  const endpoint = URL.parse(baseUrl?.trim() ?? "");
+  if (
+    endpoint === null ||
+    (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") ||
+    endpoint.hostname === "" ||
+    endpoint.hostname === "api.anthropic.com"
+  ) {
+    return undefined;
+  }
+  return endpoint.origin;
+}
+
+/**
+ * A teamclaude proxy answers quotas under its origin whatever path ANTHROPIC_BASE_URL names.
+ * The path is the only way to tell it apart from any other proxy.
+ */
+export function claudeQuotaEndpoint(baseUrl: string | undefined): string | undefined {
+  const origin = claudeProxyOrigin(baseUrl);
+  return origin === undefined ? undefined : `${origin}/teamclaude/quota`;
+}
+
+// Bucket fields are read structurally: one malformed field must not reject the whole payload.
+const TeamclaudeBucket = Schema.Struct({
+  utilization: Schema.optional(Schema.Unknown),
+  nextResetAt: Schema.optional(Schema.Unknown),
+});
+const TeamclaudeQuota = Schema.Struct({
+  aggregate: Schema.Struct({
+    fiveHour: Schema.optional(Schema.NullOr(TeamclaudeBucket)),
+    weeklyShared: Schema.optional(Schema.NullOr(TeamclaudeBucket)),
+    weeklySonnet: Schema.optional(Schema.NullOr(TeamclaudeBucket)),
+  }),
+});
+const decodeTeamclaudeQuota = Schema.decodeUnknownOption(TeamclaudeQuota);
+
+const QUOTA_WINDOWS: ReadonlyArray<{
+  readonly bucket: "fiveHour" | "weeklyShared" | "weeklySonnet";
+  readonly window: Pick<ServerProviderUsageWindow, "id" | "kind" | "label" | "windowDurationMins">;
+}> = [
+  { bucket: "fiveHour", window: { id: "five_hour", ...WINDOWS.five_hour! } },
+  { bucket: "weeklyShared", window: { id: "seven_day", ...WINDOWS.seven_day! } },
+  {
+    bucket: "weeklySonnet",
+    window: {
+      id: scopedWindowId("Sonnet"),
+      kind: "weekly",
+      label: "Weekly · Sonnet",
+      windowDurationMins: WEEK_MINS,
+    },
+  },
+];
+
+function isoFromEpochMillis(value: unknown): string | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
+  const dt = DateTime.make(value);
+  return Option.isSome(dt) ? DateTime.formatIso(dt.value) : undefined;
+}
+
+function quotaWindow(
+  bucket: typeof TeamclaudeBucket.Type | null | undefined,
+  window: (typeof QUOTA_WINDOWS)[number]["window"],
+): ServerProviderUsageWindow | undefined {
+  if (!bucket || typeof bucket.utilization !== "number" || !Number.isFinite(bucket.utilization)) {
+    return undefined;
+  }
+  const resetsAt = isoFromEpochMillis(bucket.nextResetAt);
+  // Exhaustion is exact (>=100) downstream, so a fraction just short of full must not round into
+  // it: one decimal is display precision, and only a full window reports 100.
+  const usedPercent =
+    bucket.utilization >= 1 ? 100 : clampPercent(Math.floor(bucket.utilization * 1000) / 10);
+  return {
+    ...window,
+    usedPercent,
+    ...(resetsAt ? { resetsAt } : {}),
+  };
+}
+
+/**
+ * Teamclaude reports 0-1 fractions of quota used, in epoch milliseconds. Undefined means the
+ * body is not a teamclaude quota payload, so discovery can tell a proxy from another endpoint.
+ */
+export function claudeQuotaResponseToWindows(
+  body: unknown,
+): ReadonlyArray<ServerProviderUsageWindow> | undefined {
+  const quota = Option.getOrUndefined(decodeTeamclaudeQuota(body));
+  if (quota === undefined) return undefined;
+  // Every bucket is optional, so an unrelated `{"aggregate": …}` would otherwise decode as a
+  // quota response with nothing in it. A known key must be there before this counts as teamclaude.
+  const aggregate: Record<string, unknown> = quota.aggregate;
+  if (!QUOTA_WINDOWS.some(({ bucket }) => bucket in aggregate)) return undefined;
+  const windows: ServerProviderUsageWindow[] = [];
+  for (const { bucket, window } of QUOTA_WINDOWS) {
+    const mapped = quotaWindow(quota.aggregate[bucket], window);
+    if (mapped) windows.push(mapped);
+  }
+  return windows;
+}

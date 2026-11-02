@@ -25,9 +25,13 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
         expect(yield* resolveClaudeHomePath({ homePath })).toBe(resolved);
         expect((yield* makeClaudeEnvironment({ homePath })).CLAUDE_CONFIG_DIR).toBe(resolved);
         expect(yield* makeClaudeContinuationGroupKey({ homePath })).toBe(`claude:home:${resolved}`);
-        expect(yield* makeClaudeCapabilitiesCacheKey({ binaryPath: "claude", homePath })).toBe(
-          `claude\0${resolved}\0`,
-        );
+        expect(
+          yield* makeClaudeCapabilitiesCacheKey({
+            binaryPath: "claude",
+            homePath,
+            usageLimitsUrl: "",
+          }),
+        ).toBe(`claude\0${resolved}\0\0\0`);
       }),
     );
 
@@ -51,10 +55,25 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
 
     it.effect("separates capability probes by cwd", () =>
       Effect.gen(function* () {
-        const config = { binaryPath: "claude", homePath: "" };
+        const config = { binaryPath: "claude", homePath: "", usageLimitsUrl: "" };
         const first = yield* makeClaudeCapabilitiesCacheKey(config, "/repo-a");
         const second = yield* makeClaudeCapabilitiesCacheKey(config, "/repo-b");
         expect(first).not.toBe(second);
+      }),
+    );
+
+    it.effect("separates capability probes by the endpoint that reports limits", () =>
+      Effect.gen(function* () {
+        const config = { binaryPath: "claude", homePath: "", usageLimitsUrl: "" };
+        const plain = yield* makeClaudeCapabilitiesCacheKey(config);
+        const configured = yield* makeClaudeCapabilitiesCacheKey({
+          ...config,
+          usageLimitsUrl: "https://quota.example/teamclaude/quota",
+        });
+        const proxied = yield* makeClaudeCapabilitiesCacheKey(config, undefined, {
+          ANTHROPIC_BASE_URL: "https://teamclaude.example",
+        });
+        expect(new Set([plain, configured, proxied]).size).toBe(3);
       }),
     );
   });
