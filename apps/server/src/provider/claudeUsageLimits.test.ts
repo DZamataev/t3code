@@ -277,11 +277,11 @@ describe("claudeQuotaResponseToWindows", () => {
         resetsAt: "2026-11-03T01:00:00.493Z",
       },
       {
-        id: "seven_day_sonnet",
+        id: "seven_day_fable",
         kind: "weekly",
-        label: "Weekly · Sonnet",
+        label: "Weekly · Fable",
         windowDurationMins: 10080,
-        usedPercent: 100,
+        usedPercent: 2,
         resetsAt: "2026-11-03T01:00:00.493Z",
       },
     ]);
@@ -350,6 +350,48 @@ describe("claudeQuotaResponseToWindows", () => {
       ],
     },
     {
+      // teamclaude repeats the shared weekly for a bucket the plan does not have.
+      name: "hides a scoped window that only repeats the shared weekly",
+      aggregate: {
+        weeklyShared: { utilization: 0.6 },
+        weeklySonnet: { utilization: 0.6 },
+        weeklyFable: { utilization: 0.6 },
+      },
+      expected: [
+        {
+          id: "seven_day",
+          kind: "weekly",
+          label: "Weekly",
+          windowDurationMins: 10080,
+          usedPercent: 60,
+        },
+      ],
+    },
+    {
+      name: "keeps a scoped window that has a limit of its own",
+      aggregate: {
+        weeklyShared: { utilization: 0.6 },
+        weeklySonnet: { utilization: 0.6 },
+        weeklyFable: { utilization: 0.1 },
+      },
+      expected: [
+        {
+          id: "seven_day",
+          kind: "weekly",
+          label: "Weekly",
+          windowDurationMins: 10080,
+          usedPercent: 60,
+        },
+        {
+          id: "seven_day_fable",
+          kind: "weekly",
+          label: "Weekly · Fable",
+          windowDurationMins: 10080,
+          usedPercent: 10,
+        },
+      ],
+    },
+    {
       name: "clamps utilization to 0-100 and drops a non-finite one",
       aggregate: {
         fiveHour: { utilization: 1.5 },
@@ -393,7 +435,13 @@ describe("claudeQuotaResponseToWindows", () => {
   ])("$name", ({ aggregate, expected }) => {
     expect(
       claudeQuotaResponseToWindows({
-        aggregate: { fiveHour: null, weeklyShared: null, weeklySonnet: null, ...aggregate },
+        aggregate: {
+          fiveHour: null,
+          weeklyShared: null,
+          weeklySonnet: null,
+          weeklyFable: null,
+          ...aggregate,
+        },
         accounts: [],
       }),
     ).toEqual(expected);

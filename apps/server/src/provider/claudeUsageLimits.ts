@@ -51,16 +51,24 @@ function scopedWindowId(displayName: string): string {
   return `seven_day_${displayName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
 }
 
+function scopedWindowShape(
+  displayName: string,
+): Pick<ServerProviderUsageWindow, "id" | "kind" | "label" | "windowDurationMins"> {
+  return {
+    id: scopedWindowId(displayName),
+    kind: "weekly",
+    label: `Weekly · ${displayName}`,
+    windowDurationMins: WEEK_MINS,
+  };
+}
+
 function scopedWindow(
   displayName: string,
   usedPercent: number,
   resetsAt: string | undefined,
 ): ServerProviderUsageWindow {
   return {
-    id: scopedWindowId(displayName),
-    kind: "weekly",
-    label: `Weekly · ${displayName}`,
-    windowDurationMins: WEEK_MINS,
+    ...scopedWindowShape(displayName),
     usedPercent: clampPercent(usedPercent),
     ...(resetsAt ? { resetsAt } : {}),
   };
@@ -257,25 +265,29 @@ const TeamclaudeQuota = Schema.Struct({
     fiveHour: Schema.optional(Schema.NullOr(TeamclaudeBucket)),
     weeklyShared: Schema.optional(Schema.NullOr(TeamclaudeBucket)),
     weeklySonnet: Schema.optional(Schema.NullOr(TeamclaudeBucket)),
+    weeklyFable: Schema.optional(Schema.NullOr(TeamclaudeBucket)),
   }),
 });
 const decodeTeamclaudeQuota = Schema.decodeUnknownOption(TeamclaudeQuota);
 
 const QUOTA_WINDOWS: ReadonlyArray<{
-  readonly bucket: "fiveHour" | "weeklyShared" | "weeklySonnet";
+  readonly bucket: "fiveHour" | "weeklyShared";
   readonly window: Pick<ServerProviderUsageWindow, "id" | "kind" | "label" | "windowDurationMins">;
 }> = [
   { bucket: "fiveHour", window: { id: "five_hour", ...WINDOWS.five_hour! } },
   { bucket: "weeklyShared", window: { id: "seven_day", ...WINDOWS.seven_day! } },
-  {
-    bucket: "weeklySonnet",
-    window: {
-      id: scopedWindowId("Sonnet"),
-      kind: "weekly",
-      label: "Weekly · Sonnet",
-      windowDurationMins: WEEK_MINS,
-    },
-  },
+];
+
+/**
+ * Model-scoped weekly buckets. A plan without a bucket of its own is reported by teamclaude as
+ * the shared weekly, so drawing it would repeat one bar and hide which limit actually bites.
+ */
+const QUOTA_SCOPED_WINDOWS: ReadonlyArray<{
+  readonly bucket: "weeklySonnet" | "weeklyFable";
+  readonly displayName: string;
+}> = [
+  { bucket: "weeklySonnet", displayName: "Sonnet" },
+  { bucket: "weeklyFable", displayName: "Fable" },
 ];
 
 function isoFromEpochMillis(value: unknown): string | undefined {
@@ -315,11 +327,20 @@ export function claudeQuotaResponseToWindows(
   // Every bucket is optional, so an unrelated `{"aggregate": …}` would otherwise decode as a
   // quota response with nothing in it. A known key must be there before this counts as teamclaude.
   const aggregate: Record<string, unknown> = quota.aggregate;
-  if (!QUOTA_WINDOWS.some(({ bucket }) => bucket in aggregate)) return undefined;
+  const known: ReadonlyArray<{ readonly bucket: string }> = [
+    ...QUOTA_WINDOWS,
+    ...QUOTA_SCOPED_WINDOWS,
+  ];
+  if (!known.some(({ bucket }) => bucket in aggregate)) return undefined;
   const windows: ServerProviderUsageWindow[] = [];
   for (const { bucket, window } of QUOTA_WINDOWS) {
     const mapped = quotaWindow(quota.aggregate[bucket], window);
     if (mapped) windows.push(mapped);
+  }
+  const sharedPercent = windows.find((window) => window.id === "seven_day")?.usedPercent;
+  for (const { bucket, displayName } of QUOTA_SCOPED_WINDOWS) {
+    const mapped = quotaWindow(quota.aggregate[bucket], scopedWindowShape(displayName));
+    if (mapped && mapped.usedPercent !== sharedPercent) windows.push(mapped);
   }
   return windows;
 }

@@ -174,7 +174,9 @@ using a proxy through `ANTHROPIC_AUTH_TOKEN`.
 When Claude reports no limits, T3 can read them from a quota endpoint. Set **Usage limits URL**
 on the Claude instance, or leave it empty and T3 probes `/teamclaude/quota` on the
 `ANTHROPIC_BASE_URL` host when that host answers like a teamclaude proxy. The endpoint needs the
-instance's `ANTHROPIC_API_KEY`.
+instance's `ANTHROPIC_API_KEY`. A model-scoped weekly window is shown only when its percentage
+differs from the shared weekly limit, so plans without a per-model limit show one weekly bar
+instead of the same bar twice.
 
 ## Connect a CLIProxyAPI hub
 
