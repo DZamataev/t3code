@@ -62,11 +62,10 @@ async function mount(props: Parameters<typeof Harness>[0]) {
 }
 
 describe("reply suggestion", () => {
-  it("shows the predicted text and its accept key instead of the placeholder", async () => {
+  it("shows the predicted text instead of the placeholder", async () => {
     await using screen = await mount({ onAccept: () => {}, onDismiss: () => {} });
 
     await expect.element(screen.getByText(SUGGESTION)).toBeInTheDocument();
-    await expect.element(screen.getByText("Tab")).toBeInTheDocument();
     await expect.element(screen.getByText("Ask anything")).not.toBeInTheDocument();
   });
 
@@ -97,21 +96,10 @@ describe("reply suggestion", () => {
     expect(onAccept).not.toHaveBeenCalled();
   });
 
-  it("accepts from the keycap", async () => {
-    const onAccept = vi.fn();
-    await using screen = await mount({ onAccept, onDismiss: () => {} });
-
-    await userEvent.click(
-      screen.getByRole("button", { name: `Use this reply suggestion: ${SUGGESTION}` }),
-    );
-
-    expect(onAccept).toHaveBeenCalledTimes(1);
-  });
-
   it("shows the placeholder when there is no suggestion", async () => {
     await using screen = await mount({ onAccept: () => {}, onDismiss: () => {}, suggestion: "" });
 
     await expect.element(screen.getByText("Ask anything")).toBeInTheDocument();
-    await expect.element(screen.getByText("Tab")).not.toBeInTheDocument();
+    await expect.element(screen.getByText(SUGGESTION)).not.toBeInTheDocument();
   });
 });

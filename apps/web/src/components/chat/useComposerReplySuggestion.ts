@@ -20,6 +20,8 @@ export function useComposerReplySuggestion(input: {
 }): {
   readonly onAccept: () => void;
   readonly onDismiss: () => void;
+  /** Sending clears the turn's suggestion at once instead of waiting for the turn to start. */
+  readonly onSent: () => void;
   readonly text: string;
 } {
   const { busy, empty, enabled, environmentId, threadId, writeDraft } = input;
@@ -78,5 +80,10 @@ export function useComposerReplySuggestion(input: {
     setDismissedText(text);
   };
 
-  return { onAccept, onDismiss, text: visible ? text : "" };
+  const onSent = () => {
+    setText("");
+    setDismissedText(null);
+  };
+
+  return { onAccept, onDismiss, onSent, text: visible ? text : "" };
 }

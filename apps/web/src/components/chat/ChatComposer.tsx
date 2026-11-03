@@ -2144,6 +2144,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     });
     setComposerSubmissionError(submission.validationMessage);
     if (!submission.didDispatch) return;
+    // The draft is empty again, but the turn has not started on the server yet: without this the
+    // previous suggestion reappears for a moment.
+    replySuggestion.onSent();
     onTypingGuardSend();
     if (shouldBlurMobileComposerOnSubmit()) {
       blurMobileComposerAfterSend();

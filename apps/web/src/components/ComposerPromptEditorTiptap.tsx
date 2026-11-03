@@ -119,7 +119,6 @@ import {
   ComposerContextRecordsContext,
 } from "./composerContextPresentation";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
-import { Kbd } from "./ui/kbd";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerCodeBlockNodeView } from "./chat/ComposerCodeBlockNodeView";
 import { resolveAssistantCitationCommentDismissal } from "./chat/assistantCitationCommentDismissal";
@@ -1859,22 +1858,8 @@ function ComposerPromptEditorTiptapInner(
                 {replySuggestion === undefined ? (
                   placeholder
                 ) : (
-                  <span className="flex items-baseline gap-2">
-                    <span className="min-w-0 truncate" data-reply-suggestion>
-                      {replySuggestion.text}
-                    </span>
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      className="pointer-events-auto shrink-0 self-center"
-                      data-reply-suggestion-key
-                      aria-label={`Use this reply suggestion: ${replySuggestion.text}`}
-                      // Keeps the caret in the editor, so the draft still accepts the ghost's key.
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={replySuggestion.onAccept}
-                    >
-                      <Kbd>Tab</Kbd>
-                    </button>
+                  <span className="min-w-0 truncate" data-reply-suggestion>
+                    {replySuggestion.text}
                   </span>
                 )}
               </div>
