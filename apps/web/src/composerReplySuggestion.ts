@@ -41,7 +41,6 @@ export function replySuggestionShouldRead(state: {
   readonly busy: boolean;
   readonly empty: boolean;
   readonly enabled: boolean;
-  readonly inFlight: boolean;
   readonly text: string;
   readonly threadId: string | null;
 }): boolean {
@@ -51,7 +50,6 @@ export function replySuggestionShouldRead(state: {
     !state.busy &&
     !state.awaitingTurn &&
     state.empty &&
-    state.text === "" &&
-    !state.inFlight
+    state.text === ""
   );
 }

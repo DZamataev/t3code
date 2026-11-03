@@ -1,5 +1,5 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import { replySuggestionShouldRead, replySuggestionVisible } from "../../composerReplySuggestion";
 import { orchestrationEnvironment } from "~/state/orchestration";
@@ -51,7 +51,6 @@ export function useComposerReplySuggestion(input: {
     }
   }
 
-  const inFlightRef = useRef(false);
   const requestSuggestion = useEffectEvent((thread: ThreadId) =>
     suggest({ environmentId, input: { threadId: thread } }),
   );
@@ -65,7 +64,6 @@ export function useComposerReplySuggestion(input: {
         busy,
         empty,
         enabled,
-        inFlight: inFlightRef.current,
         text,
         threadId,
       })
@@ -73,9 +71,7 @@ export function useComposerReplySuggestion(input: {
       return;
     }
     let cancelled = false;
-    inFlightRef.current = true;
     void requestSuggestion(threadId).then((result) => {
-      inFlightRef.current = false;
       if (cancelled || result._tag !== "Success") return;
       setText(result.value.text);
     });

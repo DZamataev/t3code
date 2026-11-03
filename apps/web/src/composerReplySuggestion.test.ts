@@ -75,7 +75,6 @@ const readable = (over: Partial<Parameters<typeof replySuggestionShouldRead>[0]>
     busy: false,
     empty: true,
     enabled: true,
-    inFlight: false,
     text: "",
     threadId: "thread-1",
     ...over,
@@ -90,9 +89,8 @@ describe("replySuggestionShouldRead", () => {
     expect(readable({ awaitingTurn: true })).toBe(false);
   });
 
-  it("does not read while a turn runs, while a request is out, or with text to keep", () => {
+  it("does not read while a turn runs or with text to keep", () => {
     expect(readable({ busy: true })).toBe(false);
-    expect(readable({ inFlight: true })).toBe(false);
     expect(readable({ text: "Run the tests" })).toBe(false);
     expect(readable({ empty: false })).toBe(false);
   });
