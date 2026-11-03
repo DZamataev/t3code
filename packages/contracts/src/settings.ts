@@ -1295,8 +1295,8 @@ export const ServerSettings = Schema.Struct({
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /**
    * Beta: predict the user's next message after a completed turn and show it as ghost text in an
-   * empty composer. The prediction reuses the turn's prompt cache right after it commits, so it
-   * costs the uncached tail; off spends nothing.
+   * empty composer. The prediction reads the whole thread from the turn's prompt cache right
+   * after it commits; off spends nothing.
    */
   composerReplySuggestions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(

@@ -97,11 +97,12 @@ const make = Effect.gen(function* () {
       providerThread,
       instruction: COMPOSER_SUGGESTION_INSTRUCTION,
     });
-    if (composerSuggestionForkMissedCache(result.cachedInputTokens)) {
+    if (composerSuggestionForkMissedCache(result.cachedInputTokens, target.promptTokens)) {
       yield* Ref.update(uncacheable, (current) => new Set(current).add(input.threadId));
       yield* Effect.logWarning("composer suggestion missed the prompt cache; thread paused", {
         threadId: input.threadId,
         cachedInputTokens: result.cachedInputTokens,
+        promptTokens: target.promptTokens,
       });
     }
     const verdict = cleanComposerSuggestion(result.text);

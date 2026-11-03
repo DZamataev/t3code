@@ -69,6 +69,7 @@ const target = (over?: Parameters<typeof records>[0], currentRunId = runId, nowM
 describe("composerSuggestionTarget", () => {
   it("follows the reply that closed the run", () => {
     expect(target()?.reply.id).toBe("message-reply");
+    expect(target()?.promptTokens).toBe(30_400);
   });
 
   it("ignores a thread with nothing to follow", () => {
@@ -126,20 +127,19 @@ describe("composerSuggestionTarget", () => {
 });
 
 describe("composerSuggestionCacheIsWarm", () => {
-  it("stops at the prefix ceiling, counting the cached part once", () => {
-    const prefix = (inputTokens: number, cachedInputTokens: number) =>
+  it("has no size limit", () => {
+    expect(
       composerSuggestionCacheIsWarm(
         turn({
           tokenUsage: {
-            inputTokens,
-            cachedInputTokens,
+            inputTokens: 400_000,
+            cachedInputTokens: 399_000,
             promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
           },
         }),
         NOW_MS,
-      );
-    expect(prefix(150_000, 140_000)).toBe(true);
-    expect(prefix(150_001, 140_000)).toBe(false);
+      ),
+    ).toBe(true);
   });
 
   it("stops once the reported cache expires", () => {
@@ -188,13 +188,15 @@ describe("composerSuggestionCacheIsWarm", () => {
 });
 
 describe("composerSuggestionForkMissedCache", () => {
-  it("flags a fork that read less than the system prompt from cache", () => {
-    expect(composerSuggestionForkMissedCache(0)).toBe(true);
-    expect(composerSuggestionForkMissedCache(144)).toBe(true);
-    expect(composerSuggestionForkMissedCache(42_058)).toBe(false);
+  it("flags a fork that read less than half of its turn's prompt from cache", () => {
+    expect(composerSuggestionForkMissedCache(144, 42_000)).toBe(true);
+    // Only the system prompt and tools matched: the conversation was paid in full.
+    expect(composerSuggestionForkMissedCache(36_000, 400_000)).toBe(true);
+    expect(composerSuggestionForkMissedCache(42_058, 42_000)).toBe(false);
+    expect(composerSuggestionForkMissedCache(399_000, 400_000)).toBe(false);
   });
 
   it("does not guess when the provider reported nothing", () => {
-    expect(composerSuggestionForkMissedCache(undefined)).toBe(false);
+    expect(composerSuggestionForkMissedCache(undefined, 42_000)).toBe(false);
   });
 });

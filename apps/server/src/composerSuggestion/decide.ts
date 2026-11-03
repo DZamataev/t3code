@@ -1,11 +1,5 @@
 import type { MessageId, ProviderThreadId, RunId } from "@t3tools/contracts";
 
-/**
- * The thread's Claude prefix (tools and system prompt are ~36k on their own) is read from cache, so
- * a suggestion costs a tenth of it; past this ceiling one turn predicts nothing.
- */
-const MAX_SUGGESTION_PREFIX_TOKENS = 150_000;
-
 /** Only the fields a suggestion decision reads; the projections carry more. */
 export interface ComposerSuggestionMessage {
   readonly id: MessageId;
@@ -87,23 +81,22 @@ export function composerSuggestionCacheIsWarm(
   const usage = turn.tokenUsage;
   if (usage === undefined || usage.promptCacheExpiresAt === undefined) return false;
   const expiresAt = Date.parse(usage.promptCacheExpiresAt);
-  if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) return false;
-  // inputTokens is the whole prompt, cached part included.
-  return (usage.inputTokens ?? 0) <= MAX_SUGGESTION_PREFIX_TOKENS;
+  return Number.isFinite(expiresAt) && expiresAt > nowMs;
 }
 
 /**
- * A Claude prefix is at least its ~36k of system prompt and tools, so a fork that read less than
- * this from cache paid for the thread in full. Unreported usage is unknown, not a miss.
+ * Whether a fork paid for most of its thread in full: it should read about the whole prompt of the
+ * turn it follows (`inputTokens` counts the cached part too) from cache. A thread has no size limit,
+ * so a miss on a long one is the expensive case. Unreported usage is unknown, not a miss.
  */
-const MIN_FORK_CACHED_INPUT_TOKENS = 10_000;
-
-export const composerSuggestionForkMissedCache = (cachedInputTokens: number | undefined): boolean =>
-  cachedInputTokens !== undefined && cachedInputTokens < MIN_FORK_CACHED_INPUT_TOKENS;
+export const composerSuggestionForkMissedCache = (
+  cachedInputTokens: number | undefined,
+  turnPromptTokens: number,
+): boolean => cachedInputTokens !== undefined && cachedInputTokens < turnPromptTokens / 2;
 
 /**
  * The turn a suggestion would follow, or null when predicting it is pointless or unsafe: no
- * assistant reply, no live native session, or a cache that is cold, unreported, or too large.
+ * assistant reply, no live native session, or a cache that is cold or unreported.
  */
 export function composerSuggestionTarget(
   records: ComposerSuggestionRecords,
@@ -112,6 +105,8 @@ export function composerSuggestionTarget(
 ): {
   readonly reply: ComposerSuggestionMessage;
   readonly providerThreadId: ProviderThreadId;
+  /** The whole prompt of the turn's last request, which a fork should read back from cache. */
+  readonly promptTokens: number;
 } | null {
   const thread = records.thread;
   if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") return null;
@@ -123,5 +118,9 @@ export function composerSuggestionTarget(
   if (providerThread === undefined) return null;
   const turn = latestCompletedTurn(records.providerTurns, providerThread.id);
   if (turn === undefined || !composerSuggestionCacheIsWarm(turn, nowMs)) return null;
-  return { providerThreadId: providerThread.id, reply };
+  return {
+    providerThreadId: providerThread.id,
+    reply,
+    promptTokens: turn.tokenUsage?.inputTokens ?? 0,
+  };
 }
