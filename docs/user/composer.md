@@ -149,6 +149,22 @@ the text is an unedited recalled prompt, with the caret on the first visual line
 the last visual line for `ArrowDown`, counting wrapped lines. Editing a recalled prompt turns it
 into a normal draft.
 
+## Reply suggestions
+
+On web and desktop, a finished Claude turn can leave a prediction of what you
+will type next in the empty composer: the suggested message replaces the
+placeholder, with a `Tab` key beside it. Press `Tab` or `ArrowRight`, or click
+the key, to put it in the composer without sending. `Esc` hides it until the
+next turn; typing hides it while the draft has text, and clearing the draft
+brings it back.
+
+The prediction runs on the thread's own Claude model immediately after a turn
+finishes, while the provider's prompt cache still covers that conversation, so
+it costs only the new text. Other providers, subagent and archived threads,
+threads whose context has grown past 60k tokens, and turns whose cache has
+already expired get no suggestion instead. Turn it on in Settings → Labs →
+Reply suggestions.
+
 ## Edit an earlier prompt
 
 On web and desktop, choose **Edit from here** beneath a sent message to rewind

@@ -480,6 +480,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta link another machine vps peer agents work there delegate"],
   },
   {
+    id: "composer-reply-suggestions",
+    title: "Reply suggestions",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta ghost text composer predict next message suggestion autocomplete reply"],
+  },
+  {
     id: "simlock-hosts",
     title: "Simlock device hosts (alpha)",
     to: "/settings/labs",
