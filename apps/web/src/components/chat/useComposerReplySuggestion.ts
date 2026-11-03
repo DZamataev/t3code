@@ -1,14 +1,16 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useEffect, useEffectEvent, useState } from "react";
+import type { EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
+import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
 
-import { replySuggestionShouldRead, replySuggestionVisible } from "../../composerReplySuggestion";
+import { createReplySuggestionStore, replySuggestionVisible } from "../../composerReplySuggestion";
 import { orchestrationEnvironment } from "~/state/orchestration";
 import { useAtomCommand } from "~/state/use-atom-command";
 
+const replySuggestions = createReplySuggestionStore();
+
 /**
- * Reads the suggestion the server computed for this thread's latest completed turn. The read is
- * free — the prediction happened when the turn committed — so a composer that mounts, switches
- * threads, or clears its draft asks again and gets the same text back.
+ * Reads the suggestion the server computed after this thread's latest completed run. The store
+ * outlives the composer, so switching threads shows a known suggestion at once and asks about each
+ * run once; a send or Escape retires that run's suggestion for good.
  */
 export function useComposerReplySuggestion(input: {
   readonly busy: boolean;
@@ -16,87 +18,58 @@ export function useComposerReplySuggestion(input: {
   readonly enabled: boolean;
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId | null;
+  /** The thread's latest run once it completed, or null while one runs or none has. */
+  readonly runId: RunId | null;
   readonly writeDraft: (text: string) => void;
 }): {
   readonly onAccept: () => void;
   readonly onDismiss: () => void;
-  /** Sending clears the turn's suggestion at once instead of waiting for the turn to start. */
+  /** Sending retires the shown suggestion before the next run is visible to the client. */
   readonly onSent: () => void;
   readonly text: string;
 } {
-  const { busy, empty, enabled, environmentId, threadId, writeDraft } = input;
+  const { busy, empty, enabled, environmentId, runId, threadId, writeDraft } = input;
   const suggest = useAtomCommand(orchestrationEnvironment.v2.suggestComposerReply, {
     reportFailure: false,
   });
-  const [text, setText] = useState("");
-  const [dismissedText, setDismissedText] = useState<string | null>(null);
-  // A suggestion belongs to one turn and one thread: both replace everything known about it.
-  const [knownThread, setKnownThread] = useState(threadId);
-  const [wasBusy, setWasBusy] = useState(busy);
-  // A sent message ends the turn the shown suggestion belonged to, and the next turn has not
-  // produced one yet: reading now would resurrect the previous turn's text for a moment.
-  const [awaitingTurn, setAwaitingTurn] = useState(false);
-  if (knownThread !== threadId) {
-    setKnownThread(threadId);
-    setAwaitingTurn(false);
-    setText("");
-    setDismissedText(null);
-  }
-  if (wasBusy !== busy) {
-    setWasBusy(busy);
-    setAwaitingTurn(false);
-    if (busy) {
-      setText("");
-      setDismissedText(null);
-    }
-  }
-
-  const requestSuggestion = useEffectEvent((thread: ThreadId) =>
-    suggest({ environmentId, input: { threadId: thread } }),
+  const key = threadId === null ? null : `${environmentId}\u0000${threadId}`;
+  const entry = useSyncExternalStore(replySuggestions.subscribe, () =>
+    key === null ? undefined : replySuggestions.get(key),
   );
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the read answers after the composer may have gained text or changed threads; the cleanup drops it instead of syncing state
+  const requestSuggestion = useEffectEvent((thread: ThreadId, run: RunId) =>
+    suggest({ environmentId, input: { threadId: thread, runId: run } }),
+  );
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server about a newly completed run; the answer lands in the module store, keyed by that run
   useEffect(() => {
-    if (threadId === null) return;
-    if (
-      !replySuggestionShouldRead({
-        awaitingTurn,
-        busy,
-        empty,
-        enabled,
-        text,
-        threadId,
-      })
-    ) {
-      return;
-    }
-    let cancelled = false;
-    void requestSuggestion(threadId).then((result) => {
-      if (cancelled || result._tag !== "Success") return;
-      setText(result.value.text);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [awaitingTurn, busy, empty, enabled, text, threadId]);
+    if (!enabled || busy || key === null || threadId === null || runId === null) return;
+    if (!replySuggestions.shouldRead(key, runId)) return;
+    replySuggestions.beginRead(key, runId);
+    void requestSuggestion(threadId, runId).then((result) =>
+      replySuggestions.endRead(
+        key,
+        runId,
+        result._tag === "Success" ? result.value.text : undefined,
+      ),
+    );
+  }, [busy, enabled, key, runId, threadId]);
 
-  const visible = replySuggestionVisible({ busy, dismissedText, empty, text });
+  const visible = enabled && replySuggestionVisible({ busy, empty, entry, runId });
+  const text = visible && entry !== undefined ? entry.text : "";
 
-  const onAccept = () => {
-    if (!visible) return;
-    writeDraft(text);
+  const retire = () => {
+    if (key !== null && runId !== null) replySuggestions.dismiss(key, runId);
   };
 
-  const onDismiss = () => {
-    if (!visible) return;
-    setDismissedText(text);
+  return {
+    onAccept: () => {
+      if (text !== "") writeDraft(text);
+    },
+    onDismiss: () => {
+      if (text !== "") retire();
+    },
+    onSent: retire,
+    text,
   };
-
-  const onSent = () => {
-    setAwaitingTurn(true);
-    setText("");
-    setDismissedText(null);
-  };
-
-  return { onAccept, onDismiss, onSent, text: visible ? text : "" };
 }

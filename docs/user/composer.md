@@ -153,16 +153,16 @@ into a normal draft.
 
 On web and desktop, a finished Claude turn can leave a prediction of what you
 will type next in the empty composer: the suggested message replaces the
-placeholder, with a `Tab` key beside it. Press `Tab` or `ArrowRight`, or click
-the key, to put it in the composer without sending. `Esc` hides it until the
-next turn; typing hides it while the draft has text, and clearing the draft
-brings it back.
+placeholder. Press `Tab` or `ArrowRight` to put it in the composer without
+sending. `Esc` hides it until the next turn; typing hides it while the draft
+has text, and clearing the draft brings it back.
 
 The prediction runs on the thread's own Claude model immediately after a turn
 finishes, while the provider's prompt cache still covers that conversation, so
 it costs only the new text. Other providers, subagent and archived threads,
 threads whose context has grown past 150k tokens, and turns whose cache has
-already expired get no suggestion instead. Turn it on in Settings → Labs →
+already expired get no suggestion instead. A thread whose prediction misses the
+cache anyway stops predicting until the server restarts. Turn it on in Settings → Labs →
 Reply suggestions.
 
 ## Edit an earlier prompt

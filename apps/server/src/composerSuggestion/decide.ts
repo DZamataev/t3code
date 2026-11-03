@@ -52,13 +52,6 @@ const isAssistantReply = (
   message.runId !== null &&
   message.text.trim().length > 0;
 
-/** The reply that closed the thread's latest run, which is the text a suggestion follows. */
-export function lastAssistantReply(
-  messages: ReadonlyArray<ComposerSuggestionMessage>,
-): ComposerSuggestionMessage | undefined {
-  return messages.filter((message) => isAssistantReply(message)).at(-1);
-}
-
 const lastAssistantReplyOfRun = (
   messages: ReadonlyArray<ComposerSuggestionMessage>,
   runId: RunId,
@@ -95,8 +88,18 @@ export function composerSuggestionCacheIsWarm(
   if (usage === undefined || usage.promptCacheExpiresAt === undefined) return false;
   const expiresAt = Date.parse(usage.promptCacheExpiresAt);
   if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) return false;
-  return (usage.inputTokens ?? 0) + (usage.cachedInputTokens ?? 0) <= MAX_SUGGESTION_PREFIX_TOKENS;
+  // inputTokens is the whole prompt, cached part included.
+  return (usage.inputTokens ?? 0) <= MAX_SUGGESTION_PREFIX_TOKENS;
 }
+
+/**
+ * A Claude prefix is at least its ~36k of system prompt and tools, so a fork that read less than
+ * this from cache paid for the thread in full. Unreported usage is unknown, not a miss.
+ */
+const MIN_FORK_CACHED_INPUT_TOKENS = 10_000;
+
+export const composerSuggestionForkMissedCache = (cachedInputTokens: number | undefined): boolean =>
+  cachedInputTokens !== undefined && cachedInputTokens < MIN_FORK_CACHED_INPUT_TOKENS;
 
 /**
  * The turn a suggestion would follow, or null when predicting it is pointless or unsafe: no

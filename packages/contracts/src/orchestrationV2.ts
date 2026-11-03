@@ -3593,13 +3593,17 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   suggestComposerReply: "orchestration.suggestComposerReply",
 } as const;
 
-/** Reads the suggestion already computed for a thread's latest completed turn; never starts a model request. */
-export const OrchestrationV2SuggestComposerReplyInput = Schema.Struct({ threadId: ThreadId });
+/** Reads the suggestion already computed after a completed run; never starts a model request. */
+export const OrchestrationV2SuggestComposerReplyInput = Schema.Struct({
+  threadId: ThreadId,
+  /** The completed run the suggestion follows: a newer run makes an older suggestion meaningless. */
+  runId: RunId,
+});
 export type OrchestrationV2SuggestComposerReplyInput =
   typeof OrchestrationV2SuggestComposerReplyInput.Type;
 
 export const OrchestrationV2SuggestComposerReplyResult = Schema.Struct({
-  /** Empty when the thread has no warm suggestion: the feature is off, the turn was skipped, or the cache expired. */
+  /** Empty when the run has no suggestion: the feature is off, the run was skipped, or the model declined. */
   text: Schema.String,
 });
 export type OrchestrationV2SuggestComposerReplyResult =

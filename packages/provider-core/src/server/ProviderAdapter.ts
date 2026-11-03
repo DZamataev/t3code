@@ -686,6 +686,10 @@ export class ProviderAdapterV2 extends Context.Service<
       readonly providerThread: OrchestrationV2ProviderThread;
       /** User-role text of the prediction request, appended after the session's own transcript. */
       readonly instruction: string;
-    }) => Effect.Effect<{ readonly text: string }>;
+    }) => Effect.Effect<{
+      readonly text: string;
+      /** Prompt tokens the request read from cache; undefined when the provider did not say. */
+      readonly cachedInputTokens: number | undefined;
+    }>;
   }
 >()("@t3tools/provider-core/server/ProviderAdapter/ProviderAdapterV2") {}

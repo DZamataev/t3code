@@ -265,6 +265,7 @@ import { readEnvironmentScope, readPreparedConnection } from "../../state/sessio
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 import { useComposerRestingTransition } from "./useComposerRestingTransition";
 import { useComposerReplySuggestion } from "./useComposerReplySuggestion";
+import { replySuggestionRunId } from "../../composerReplySuggestion";
 import { ComposerCommandMenuLayer } from "./ComposerCommandMenuLayer";
 import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
 import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
@@ -1829,6 +1830,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     environmentId,
     // A draft has no server thread yet, so there is nothing to have predicted.
     threadId: routeKind === "draft" ? null : (activeThread?.id ?? null),
+    runId: replySuggestionRunId(activeThread?.latestRun),
     writeDraft: writeReplySuggestionDraft,
   });
 
@@ -2144,8 +2146,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     });
     setComposerSubmissionError(submission.validationMessage);
     if (!submission.didDispatch) return;
-    // The draft is empty again, but the turn has not started on the server yet: without this the
-    // previous suggestion reappears for a moment.
+    // The draft is empty again before the new run reaches this client: retire the shown one now.
     replySuggestion.onSent();
     onTypingGuardSend();
     if (shouldBlurMobileComposerOnSubmit()) {

@@ -2100,7 +2100,9 @@ export const layerWsRpc = (
           ),
         [ORCHESTRATION_V2_WS_METHODS.suggestComposerReply]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
-            Effect.andThen(composerSuggestions.read({ threadId: input.threadId })),
+            Effect.andThen(
+              composerSuggestions.read({ threadId: input.threadId, runId: input.runId }),
+            ),
           ),
         [ORCHESTRATION_V2_WS_METHODS.launchThread]: (input) =>
           Effect.annotateCurrentSpan({

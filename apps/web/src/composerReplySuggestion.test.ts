@@ -1,20 +1,22 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  createReplySuggestionStore,
   isReplySuggestionAcceptKey,
-  replySuggestionShouldRead,
+  replySuggestionRunId,
   replySuggestionVisible,
-  type ReplySuggestionVisibility,
+  type ReplySuggestionEntry,
 } from "./composerReplySuggestion";
 
-const visible = (over: Partial<ReplySuggestionVisibility> = {}): boolean =>
-  replySuggestionVisible({
-    busy: false,
-    dismissedText: null,
-    empty: true,
-    text: "Run the tests",
-    ...over,
-  });
+const entry = (over: Partial<ReplySuggestionEntry> = {}): ReplySuggestionEntry => ({
+  runId: "run-1",
+  text: "Run the tests",
+  dismissed: false,
+  ...over,
+});
+
+const visible = (over: Partial<Parameters<typeof replySuggestionVisible>[0]> = {}): boolean =>
+  replySuggestionVisible({ busy: false, empty: true, entry: entry(), runId: "run-1", ...over });
 
 const key = (
   over: Partial<{
@@ -34,22 +36,30 @@ const key = (
 });
 
 describe("replySuggestionVisible", () => {
-  it("shows an undismissed suggestion in an idle, empty composer", () => {
+  it("shows the current run's undismissed suggestion in an idle, empty composer", () => {
     expect(visible()).toBe(true);
   });
 
-  it("hides while a turn runs", () => {
+  it("hides while a turn runs or once the composer holds anything", () => {
     expect(visible({ busy: true })).toBe(false);
-  });
-
-  it("hides once the composer holds anything", () => {
     expect(visible({ empty: false })).toBe(false);
   });
 
-  it("hides nothing and hides what the user dismissed", () => {
-    expect(visible({ text: "" })).toBe(false);
-    expect(visible({ dismissedText: "Run the tests" })).toBe(false);
-    expect(visible({ dismissedText: "Commit this" })).toBe(true);
+  it("hides another run's suggestion, an empty one, and a dismissed one", () => {
+    expect(visible({ runId: "run-2" })).toBe(false);
+    expect(visible({ runId: null })).toBe(false);
+    expect(visible({ entry: entry({ text: "" }) })).toBe(false);
+    expect(visible({ entry: entry({ dismissed: true }) })).toBe(false);
+    expect(visible({ entry: undefined })).toBe(false);
+  });
+});
+
+describe("replySuggestionRunId", () => {
+  it("follows only a completed latest run", () => {
+    expect(replySuggestionRunId({ runId: "run-1", status: "completed" })).toBe("run-1");
+    expect(replySuggestionRunId({ runId: "run-1", status: "running" })).toBeNull();
+    expect(replySuggestionRunId({ runId: "run-1", status: "failed" })).toBeNull();
+    expect(replySuggestionRunId(null)).toBeNull();
   });
 });
 
@@ -69,34 +79,54 @@ describe("isReplySuggestionAcceptKey", () => {
   });
 });
 
-const readable = (over: Partial<Parameters<typeof replySuggestionShouldRead>[0]> = {}): boolean =>
-  replySuggestionShouldRead({
-    awaitingTurn: false,
-    busy: false,
-    empty: true,
-    enabled: true,
-    text: "",
-    threadId: "thread-1",
-    ...over,
+describe("reply suggestion store", () => {
+  it("asks about each run once, even across thread switches mid-read", () => {
+    const store = createReplySuggestionStore();
+    expect(store.shouldRead("thread-1", "run-1")).toBe(true);
+    store.beginRead("thread-1", "run-1");
+    // The composer left and came back while the read was out.
+    expect(store.shouldRead("thread-1", "run-1")).toBe(false);
+    expect(store.shouldRead("thread-2", "run-9")).toBe(true);
+
+    store.endRead("thread-1", "run-1", "Run the tests");
+    expect(store.get("thread-1")).toEqual(entry());
+    expect(store.shouldRead("thread-1", "run-1")).toBe(false);
+    expect(store.shouldRead("thread-1", "run-2")).toBe(true);
   });
 
-describe("replySuggestionShouldRead", () => {
-  it("reads an idle, empty composer with nothing to show", () => {
-    expect(readable()).toBe(true);
+  it("keeps a failed read's run unknown so the next look retries", () => {
+    const store = createReplySuggestionStore();
+    store.beginRead("thread-1", "run-1");
+    store.endRead("thread-1", "run-1", undefined);
+    expect(store.get("thread-1")).toBeUndefined();
+    expect(store.shouldRead("thread-1", "run-1")).toBe(true);
   });
 
-  it("does not read right after a send, before the turn starts", () => {
-    expect(readable({ awaitingTurn: true })).toBe(false);
+  it("drops an answer for a run that is no longer the one asked about", () => {
+    const store = createReplySuggestionStore();
+    store.beginRead("thread-1", "run-1");
+    store.beginRead("thread-1", "run-2");
+    store.endRead("thread-1", "run-1", "Old suggestion");
+    expect(store.get("thread-1")).toBeUndefined();
+    store.endRead("thread-1", "run-2", "New suggestion");
+    expect(store.get("thread-1")?.text).toBe("New suggestion");
   });
 
-  it("does not read while a turn runs or with text to keep", () => {
-    expect(readable({ busy: true })).toBe(false);
-    expect(readable({ text: "Run the tests" })).toBe(false);
-    expect(readable({ empty: false })).toBe(false);
+  it("never lets a late answer bring back a suggestion retired by a send", () => {
+    const store = createReplySuggestionStore();
+    store.beginRead("thread-1", "run-1");
+    store.dismiss("thread-1", "run-1");
+    store.endRead("thread-1", "run-1", "Run the tests");
+    expect(store.get("thread-1")).toEqual(entry({ text: "", dismissed: true }));
   });
 
-  it("does not read without a thread or with the feature off", () => {
-    expect(readable({ threadId: null })).toBe(false);
-    expect(readable({ enabled: false })).toBe(false);
+  it("keeps a dismissed suggestion dismissed until the next run", () => {
+    const store = createReplySuggestionStore();
+    store.beginRead("thread-1", "run-1");
+    store.endRead("thread-1", "run-1", "Run the tests");
+    store.dismiss("thread-1", "run-1");
+    expect(store.get("thread-1")).toEqual(entry({ dismissed: true }));
+    expect(store.shouldRead("thread-1", "run-1")).toBe(false);
+    expect(store.shouldRead("thread-1", "run-2")).toBe(true);
   });
 });

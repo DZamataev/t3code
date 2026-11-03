@@ -3,8 +3,8 @@ import { MessageId, ProviderThreadId, RunId } from "@t3tools/contracts";
 
 import {
   composerSuggestionCacheIsWarm,
+  composerSuggestionForkMissedCache,
   composerSuggestionTarget,
-  lastAssistantReply,
   type ComposerSuggestionMessage,
   type ComposerSuggestionRecords,
   type ComposerSuggestionTurn,
@@ -38,7 +38,7 @@ const turn = (over: Partial<ComposerSuggestionTurn> = {}): ComposerSuggestionTur
   status: "completed",
   ordinal: 1,
   tokenUsage: {
-    inputTokens: 400,
+    inputTokens: 30_400,
     cachedInputTokens: 30_000,
     promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
   },
@@ -115,7 +115,7 @@ describe("composerSuggestionTarget", () => {
     const latest = turn({
       ordinal: 2,
       tokenUsage: {
-        inputTokens: 400,
+        inputTokens: 30_400,
         cachedInputTokens: 30_000,
         promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
       },
@@ -126,33 +126,20 @@ describe("composerSuggestionTarget", () => {
 });
 
 describe("composerSuggestionCacheIsWarm", () => {
-  it("needs a reported cache hit", () => {
-    expect(
+  it("stops at the prefix ceiling, counting the cached part once", () => {
+    const prefix = (inputTokens: number, cachedInputTokens: number) =>
       composerSuggestionCacheIsWarm(
         turn({
           tokenUsage: {
-            inputTokens: 30_000,
-            cachedInputTokens: 0,
-          },
-        }),
-        NOW_MS,
-      ),
-    ).toBe(false);
-  });
-
-  it("stops at the prefix ceiling", () => {
-    expect(
-      composerSuggestionCacheIsWarm(
-        turn({
-          tokenUsage: {
-            inputTokens: 10_000,
-            cachedInputTokens: 150_001,
+            inputTokens,
+            cachedInputTokens,
             promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
           },
         }),
         NOW_MS,
-      ),
-    ).toBe(false);
+      );
+    expect(prefix(150_000, 140_000)).toBe(true);
+    expect(prefix(150_001, 140_000)).toBe(false);
   });
 
   it("stops once the reported cache expires", () => {
@@ -162,7 +149,7 @@ describe("composerSuggestionCacheIsWarm", () => {
   it("treats a turn with no reported cache lifetime as cold", () => {
     expect(
       composerSuggestionCacheIsWarm(
-        turn({ tokenUsage: { inputTokens: 400, cachedInputTokens: 30_000 } }),
+        turn({ tokenUsage: { inputTokens: 30_400, cachedInputTokens: 30_000 } }),
         NOW_MS,
       ),
     ).toBe(false);
@@ -200,11 +187,14 @@ describe("composerSuggestionCacheIsWarm", () => {
   });
 });
 
-describe("lastAssistantReply", () => {
-  it("returns the final assistant reply with text", () => {
-    expect(
-      lastAssistantReply([userMessage, reply(), reply({ id: MessageId.make("later") })])?.id,
-    ).toBe("later");
-    expect(lastAssistantReply([reply({ streaming: true })])).toBeUndefined();
+describe("composerSuggestionForkMissedCache", () => {
+  it("flags a fork that read less than the system prompt from cache", () => {
+    expect(composerSuggestionForkMissedCache(0)).toBe(true);
+    expect(composerSuggestionForkMissedCache(144)).toBe(true);
+    expect(composerSuggestionForkMissedCache(42_058)).toBe(false);
+  });
+
+  it("does not guess when the provider reported nothing", () => {
+    expect(composerSuggestionForkMissedCache(undefined)).toBe(false);
   });
 });

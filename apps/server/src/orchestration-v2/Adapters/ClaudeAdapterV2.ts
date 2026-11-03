@@ -11140,6 +11140,18 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           yield* Deferred.succeed(existing.closed, undefined);
         });
         yield* Effect.addFinalizer(() => closeSession());
+        // A closed session's turn options hold its environment and MCP servers; nothing forks them.
+        yield* Effect.addFinalizer(() =>
+          Ref.update(composerForkOptions, (current) => {
+            const kept = new Map(current);
+            for (const [nativeThreadId, captured] of current) {
+              if (captured.providerSessionId === input.providerSessionId) {
+                kept.delete(nativeThreadId);
+              }
+            }
+            return kept.size === current.size ? current : kept;
+          }),
+        );
 
         // Metadata-only transcripts cannot be resumed or recreated; fail resumeThread to trigger a fresh session and handoff.
         const hasEmptyClaudeTranscript = Effect.fn("ClaudeAdapterV2.hasEmptyClaudeTranscript")(
@@ -11655,10 +11667,11 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         ),
     ),
     suggestComposerReply: Effect.fn("ClaudeAdapterV2.suggestComposerReply")(function* (input) {
+      const none = { text: "", cachedInputTokens: undefined };
       const nativeThreadId = input.providerThread.nativeThreadRef?.nativeId;
-      if (nativeThreadId === undefined || nativeThreadId === null) return { text: "" };
+      if (nativeThreadId === undefined || nativeThreadId === null) return none;
       const captured = (yield* Ref.get(composerForkOptions)).get(nativeThreadId);
-      if (captured === undefined) return { text: "" };
+      if (captured === undefined) return none;
       // Copying the transcript into a new session keeps every request field identical, which is
       // what makes the prefix cacheable; the only new input is the instruction.
       const { sessionId: _sessionId, hooks: _hooks, ...rest } = captured.options;
@@ -11684,7 +11697,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             message: { role: "user", content: input.instruction },
             parent_tool_use_id: null,
           });
-          const text = yield* session.messages.pipe(
+          return yield* session.messages.pipe(
             // A tool call ends the prediction: the callback denies it, and closing the query
             // stops the CLI from looping on the denial.
             Stream.takeUntil(
@@ -11694,22 +11707,29 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                   message.message.content.some(isClaudeToolUseContentBlock)),
             ),
             Stream.runFold(
-              () => "",
+              (): { text: string; cachedInputTokens: number | undefined } => none,
               (acc, message) =>
                 message.type === "assistant"
-                  ? acc + textFromClaudeContent(message.message.content)
-                  : acc,
+                  ? {
+                      text: acc.text + textFromClaudeContent(message.message.content),
+                      cachedInputTokens:
+                        message.message.usage?.cache_read_input_tokens ?? acc.cachedInputTokens,
+                    }
+                  : message.type === "result"
+                    ? {
+                        text: acc.text,
+                        cachedInputTokens:
+                          message.usage.cache_read_input_tokens ?? acc.cachedInputTokens,
+                      }
+                    : acc,
             ),
           );
-          return { text };
         }).pipe(Effect.ensuring(session.close.pipe(Effect.ignore)));
       }).pipe(
         Effect.timeoutOption(90_000),
-        Effect.map((result) => (Option.isSome(result) ? result.value : { text: "" })),
+        Effect.map((result) => (Option.isSome(result) ? result.value : none)),
         Effect.catchCause((cause) =>
-          Effect.logDebug("Claude composer suggestion skipped", { cause }).pipe(
-            Effect.as({ text: "" }),
-          ),
+          Effect.logDebug("Claude composer suggestion skipped", { cause }).pipe(Effect.as(none)),
         ),
       );
     }),
