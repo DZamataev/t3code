@@ -38,6 +38,9 @@ const MAX_CACHED_THREADS = 200;
 /** A read that arrives while this thread's prediction is still running waits this long for it. */
 const SUGGESTION_WAIT_MS = 20_000;
 
+/** How long a read waits for the prediction of a turn it may have outraced. */
+const SUGGESTION_GATE_GRACE_MS = 2_000;
+
 interface CachedSuggestion {
   readonly messageId: MessageId;
   readonly text: string;
@@ -127,7 +130,14 @@ const make = Effect.gen(function* () {
       ) {
         return { text: settled.text };
       }
-      const gate = (yield* Ref.get(pending)).get(input.threadId);
+      // The client can see the finished turn before this server's stream subscriber starts the
+      // prediction, so give the gate a moment to appear before answering "nothing".
+      const deadline = DateTime.toEpochMillis(yield* DateTime.now) + SUGGESTION_GATE_GRACE_MS;
+      let gate = (yield* Ref.get(pending)).get(input.threadId);
+      while (gate === undefined && DateTime.toEpochMillis(yield* DateTime.now) < deadline) {
+        yield* Effect.sleep("100 millis");
+        gate = (yield* Ref.get(pending)).get(input.threadId);
+      }
       if (gate === undefined) return { text: "" };
       // The prediction for this turn is still running: answer with its result, not with "none yet".
       yield* Deferred.await(gate).pipe(Effect.timeoutOption(SUGGESTION_WAIT_MS));
