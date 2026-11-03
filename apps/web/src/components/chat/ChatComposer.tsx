@@ -264,6 +264,8 @@ import { usePanelAnimationSettings } from "../../panelAnimations";
 import { readEnvironmentScope, readPreparedConnection } from "../../state/session";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 import { useComposerRestingTransition } from "./useComposerRestingTransition";
+import { useComposerReplySuggestion } from "./useComposerReplySuggestion";
+import { replySuggestionRunId } from "../../composerReplySuggestion";
 import { ComposerCommandMenuLayer } from "./ComposerCommandMenuLayer";
 import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
 import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
@@ -1811,6 +1813,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const applyPromptReplacementStable = useStableCallback(applyPromptReplacement);
 
+  const writeReplySuggestionDraft = useStableCallback((text: string) => {
+    // Typing wins the race: the suggestion only ever fills an empty draft.
+    if (promptRef.current !== "") return;
+    applyPromptReplacement(0, 0, text, { focusEditorAfterReplace: true });
+  });
+  const replySuggestion = useComposerReplySuggestion({
+    busy: phase === "running",
+    empty:
+      prompt.trim() === "" &&
+      composerFiles.length === 0 &&
+      composerImages.length === 0 &&
+      composerContextRecords.size === 0,
+    enabled:
+      settings.composerReplySuggestions && activeThread !== undefined && !projectSelectionRequired,
+    environmentId,
+    // A draft has no server thread yet, so there is nothing to have predicted.
+    threadId: routeKind === "draft" ? null : (activeThread?.id ?? null),
+    runId: replySuggestionRunId(activeThread?.latestRun),
+    writeDraft: writeReplySuggestionDraft,
+  });
+
   const readComposerSnapshot = (): {
     value: string;
     cursor: number;
@@ -2123,6 +2146,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     });
     setComposerSubmissionError(submission.validationMessage);
     if (!submission.didDispatch) return;
+    // The draft is empty again before the new run reaches this client: retire the shown one now.
+    replySuggestion.onSent();
     onTypingGuardSend();
     if (shouldBlurMobileComposerOnSubmit()) {
       blurMobileComposerAfterSend();
@@ -3405,6 +3430,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     contextRecords={composerContextRecords}
                     buildContextClipboardFragment={buildContextClipboardFragmentStable}
                     importContextFragment={importContextFragmentStable}
+                    replySuggestion={
+                      replySuggestion.text !== "" &&
+                      !isComposerApprovalState &&
+                      activePendingProgress === null &&
+                      !(showPlanFollowUpPrompt && activeProposedPlan)
+                        ? { text: replySuggestion.text, onAccept: replySuggestion.onAccept }
+                        : undefined
+                    }
+                    onDismissReplySuggestion={replySuggestion.onDismiss}
                     skills={selectedProviderSkills}
                     className={cn(showMobilePendingAnswerActions && "max-sm:pb-12")}
                     onChange={onPromptChangeStable}

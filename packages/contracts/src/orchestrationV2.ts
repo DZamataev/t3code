@@ -3590,7 +3590,24 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
   subscribeCommandOutput: "orchestration.subscribeCommandOutput",
+  suggestComposerReply: "orchestration.suggestComposerReply",
 } as const;
+
+/** Reads the suggestion already computed after a completed run; never starts a model request. */
+export const OrchestrationV2SuggestComposerReplyInput = Schema.Struct({
+  threadId: ThreadId,
+  /** The completed run the suggestion follows: a newer run makes an older suggestion meaningless. */
+  runId: RunId,
+});
+export type OrchestrationV2SuggestComposerReplyInput =
+  typeof OrchestrationV2SuggestComposerReplyInput.Type;
+
+export const OrchestrationV2SuggestComposerReplyResult = Schema.Struct({
+  /** Empty when the run has no suggestion: the feature is off, the run was skipped, or the model declined. */
+  text: Schema.String,
+});
+export type OrchestrationV2SuggestComposerReplyResult =
+  typeof OrchestrationV2SuggestComposerReplyResult.Type;
 
 export const OrchestrationV2SubscribeCommandOutputInput = Schema.Struct({
   threadId: ThreadId,
@@ -3918,6 +3935,15 @@ export class OrchestrationV2DispatchCommandError extends Schema.TaggedError<Orch
 
 export class OrchestrationV2GetThreadProjectionError extends Schema.TaggedError<OrchestrationV2GetThreadProjectionError>()(
   "OrchestrationV2GetThreadProjectionError",
+  {
+    threadId: ThreadId,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export class OrchestrationV2SuggestComposerReplyError extends Schema.TaggedError<OrchestrationV2SuggestComposerReplyError>()(
+  "OrchestrationV2SuggestComposerReplyError",
   {
     threadId: ThreadId,
     message: Schema.String,

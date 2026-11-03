@@ -24,6 +24,7 @@ export function LabsSettingsPanel() {
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
+        <ComposerReplySuggestionsRow />
         <SimlockHostsRow />
       </SettingsSection>
       <LegacyFeaturesSection />
@@ -158,6 +159,29 @@ function LinkedEnvironmentsRow() {
             updateSettings({ linkedEnvironmentsEnabled: Boolean(checked) })
           }
           aria-label="Linked environments"
+        />
+      }
+    />
+  );
+}
+
+function ComposerReplySuggestionsRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("composer-reply-suggestions")}
+      settingKeys={["composerReplySuggestions"]}
+      description="After a Claude turn finishes, predict your next message and show it as ghost text in an empty composer: Tab or Right arrow fills the draft, Esc hides it. The prediction reuses the finished turn's prompt cache, so it pays only the new text, and it never runs once that cache is gone."
+      control={
+        <ScopedSwitch
+          settingKeys={["composerReplySuggestions"]}
+          checked={settings.composerReplySuggestions}
+          onCheckedChange={(checked) =>
+            updateSettings({ composerReplySuggestions: Boolean(checked) })
+          }
+          aria-label="Reply suggestions"
         />
       }
     />

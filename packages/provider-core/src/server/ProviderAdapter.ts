@@ -676,5 +676,20 @@ export class ProviderAdapterV2 extends Context.Service<
     readonly openSession: (
       input: ProviderAdapterV2OpenSessionInput,
     ) => Effect.Effect<ProviderAdapterV2SessionRuntime, ProviderAdapterV2Error, Scope.Scope>;
+    /**
+     * One throwaway forked turn on a provider thread's live session, for the composer's reply
+     * suggestion. Absent when the provider cannot reuse a session's prompt cache; a request without
+     * cache reuse costs more than decorative text is worth. Never fails: no text means no suggestion.
+     */
+    readonly suggestComposerReply?: (input: {
+      readonly threadId: ThreadId;
+      readonly providerThread: OrchestrationV2ProviderThread;
+      /** User-role text of the prediction request, appended after the session's own transcript. */
+      readonly instruction: string;
+    }) => Effect.Effect<{
+      readonly text: string;
+      /** Prompt tokens the request read from cache; undefined when the provider did not say. */
+      readonly cachedInputTokens: number | undefined;
+    }>;
   }
 >()("@t3tools/provider-core/server/ProviderAdapter/ProviderAdapterV2") {}

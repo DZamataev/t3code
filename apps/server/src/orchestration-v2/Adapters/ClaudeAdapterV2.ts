@@ -4719,6 +4719,18 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
       Effect.provideService(Path.Path, path),
     );
 
+  // The exact options that opened each native session's latest turn. A composer suggestion reuses
+  // them with forkSession, so the provider's prompt cache still covers the whole prefix.
+  const composerForkOptions = yield* Ref.make(
+    new Map<
+      string,
+      {
+        readonly options: ClaudeAgentSdkQueryOptions;
+        readonly providerSessionId: ProviderAdapter.ProviderAdapterV2OpenSessionInput["providerSessionId"];
+      }
+    >(),
+  );
+
   return ProviderAdapter.ProviderAdapterV2.of({
     instanceId: adapterOptions.instanceId,
     driver: CLAUDE_PROVIDER,
@@ -10415,6 +10427,12 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             updated.add(nativeThreadId);
             return updated;
           });
+          yield* Ref.update(composerForkOptions, (current) =>
+            new Map(current).set(nativeThreadId, {
+              options: queryOptions,
+              providerSessionId: input.providerSessionId,
+            }),
+          );
           yield* resetBackgroundTaskStateForNativeThreadProcess(nativeThreadId, {
             status: "active",
           });
@@ -11122,6 +11140,18 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           yield* Deferred.succeed(existing.closed, undefined);
         });
         yield* Effect.addFinalizer(() => closeSession());
+        // A closed session's turn options hold its environment and MCP servers; nothing forks them.
+        yield* Effect.addFinalizer(() =>
+          Ref.update(composerForkOptions, (current) => {
+            const kept = new Map(current);
+            for (const [nativeThreadId, captured] of current) {
+              if (captured.providerSessionId === input.providerSessionId) {
+                kept.delete(nativeThreadId);
+              }
+            }
+            return kept.size === current.size ? current : kept;
+          }),
+        );
 
         // Metadata-only transcripts cannot be resumed or recreated; fail resumeThread to trigger a fresh session and handoff.
         const hasEmptyClaudeTranscript = Effect.fn("ClaudeAdapterV2.hasEmptyClaudeTranscript")(
@@ -11636,6 +11666,73 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           ),
         ),
     ),
+    suggestComposerReply: Effect.fn("ClaudeAdapterV2.suggestComposerReply")(function* (input) {
+      const none = { text: "", cachedInputTokens: undefined };
+      const nativeThreadId = input.providerThread.nativeThreadRef?.nativeId;
+      if (nativeThreadId === undefined || nativeThreadId === null) return none;
+      const captured = (yield* Ref.get(composerForkOptions)).get(nativeThreadId);
+      if (captured === undefined) return none;
+      // Copying the transcript into a new session keeps every request field identical, which is
+      // what makes the prefix cacheable; the only new input is the instruction.
+      const { sessionId: _sessionId, hooks: _hooks, ...rest } = captured.options;
+      const options: ClaudeAgentSdkQueryOptions = {
+        ...rest,
+        resume: nativeThreadId,
+        forkSession: true,
+        persistSession: false,
+        // Resume replays the session's recorded system prompt, so the mode does not reach the
+        // request; it does keep a stray tool call from running in the user's worktree.
+        permissionMode: "default",
+        canUseTool: async () => ({ behavior: "deny", message: "Suggestion only: no tools." }),
+      };
+      return yield* Effect.gen(function* () {
+        const session = yield* queryRunner.open({
+          threadId: input.threadId,
+          providerSessionId: captured.providerSessionId,
+          options,
+        });
+        return yield* Effect.gen(function* () {
+          yield* session.offer({
+            type: "user",
+            message: { role: "user", content: input.instruction },
+            parent_tool_use_id: null,
+          });
+          return yield* session.messages.pipe(
+            // A tool call ends the prediction: the callback denies it, and closing the query
+            // stops the CLI from looping on the denial.
+            Stream.takeUntil(
+              (message) =>
+                message.type === "result" ||
+                (message.type === "assistant" &&
+                  message.message.content.some(isClaudeToolUseContentBlock)),
+            ),
+            Stream.runFold(
+              (): { text: string; cachedInputTokens: number | undefined } => none,
+              (acc, message) =>
+                message.type === "assistant"
+                  ? {
+                      text: acc.text + textFromClaudeContent(message.message.content),
+                      cachedInputTokens:
+                        message.message.usage?.cache_read_input_tokens ?? acc.cachedInputTokens,
+                    }
+                  : message.type === "result"
+                    ? {
+                        text: acc.text,
+                        cachedInputTokens:
+                          message.usage.cache_read_input_tokens ?? acc.cachedInputTokens,
+                      }
+                    : acc,
+            ),
+          );
+        }).pipe(Effect.ensuring(session.close.pipe(Effect.ignore)));
+      }).pipe(
+        Effect.timeoutOption(90_000),
+        Effect.map((result) => (Option.isSome(result) ? result.value : none)),
+        Effect.catchCause((cause) =>
+          Effect.logDebug("Claude composer suggestion skipped", { cause }).pipe(Effect.as(none)),
+        ),
+      );
+    }),
   });
 });
 

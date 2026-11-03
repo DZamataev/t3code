@@ -69,6 +69,11 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
         label: "environment-data:orchestration-v2:dispatch-command",
         tag: ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
       }),
+      // Reads the suggestion the server already computed for a thread's latest completed turn.
+      suggestComposerReply: createEnvironmentRpcCommand(runtime, {
+        label: "environment-data:orchestration-v2:suggest-composer-reply",
+        tag: ORCHESTRATION_V2_WS_METHODS.suggestComposerReply,
+      }),
       shell: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
         label: "environment-data:orchestration-v2:shell",
         tag: ORCHESTRATION_V2_WS_METHODS.subscribeShell,
