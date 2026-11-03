@@ -41,7 +41,6 @@ const turn = (over: Partial<ComposerSuggestionTurn> = {}): ComposerSuggestionTur
     inputTokens: 400,
     cachedInputTokens: 30_000,
     promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
-    updatedAt: "2026-11-03T12:00:00.000Z",
   },
   ...over,
 });
@@ -110,7 +109,7 @@ describe("composerSuggestionTarget", () => {
       tokenUsage: {
         inputTokens: 1,
         cachedInputTokens: 1,
-        updatedAt: "2026-11-03T12:00:00.000Z",
+        promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
       },
     });
     const latest = turn({
@@ -119,7 +118,6 @@ describe("composerSuggestionTarget", () => {
         inputTokens: 400,
         cachedInputTokens: 30_000,
         promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
-        updatedAt: "2026-11-03T12:00:00.000Z",
       },
     });
     expect(target({ providerTurns: [latest, earlier] })?.reply.id).toBe("message-reply");
@@ -135,7 +133,6 @@ describe("composerSuggestionCacheIsWarm", () => {
           tokenUsage: {
             inputTokens: 30_000,
             cachedInputTokens: 0,
-            updatedAt: "2026-11-03T12:00:00.000Z",
           },
         }),
         NOW_MS,
@@ -151,7 +148,6 @@ describe("composerSuggestionCacheIsWarm", () => {
             inputTokens: 10_000,
             cachedInputTokens: 150_001,
             promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
-            updatedAt: "2026-11-03T12:00:00.000Z",
           },
         }),
         NOW_MS,
@@ -163,16 +159,29 @@ describe("composerSuggestionCacheIsWarm", () => {
     expect(composerSuggestionCacheIsWarm(turn(), NOW_MS + 180_000)).toBe(false);
   });
 
-  it("falls back to the five-minute default when no expiry is reported", () => {
-    const usage = {
-      inputTokens: 400,
-      cachedInputTokens: 30_000,
-      updatedAt: "2026-11-03T12:00:00.000Z",
-    };
-    expect(composerSuggestionCacheIsWarm(turn({ tokenUsage: usage }), NOW_MS + 60_000)).toBe(true);
-    expect(composerSuggestionCacheIsWarm(turn({ tokenUsage: usage }), NOW_MS + 6 * 60_000)).toBe(
-      false,
-    );
+  it("treats a turn with no reported cache lifetime as cold", () => {
+    expect(
+      composerSuggestionCacheIsWarm(
+        turn({ tokenUsage: { inputTokens: 400, cachedInputTokens: 30_000 } }),
+        NOW_MS,
+      ),
+    ).toBe(false);
+  });
+
+  it("counts a turn that only wrote its prefix as warm", () => {
+    // The first turn after a pause reads nothing and writes everything; the fork still reads it.
+    expect(
+      composerSuggestionCacheIsWarm(
+        turn({
+          tokenUsage: {
+            inputTokens: 37_931,
+            cachedInputTokens: 0,
+            promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
+          },
+        }),
+        NOW_MS,
+      ),
+    ).toBe(true);
   });
 
   it("treats an unparseable expiry as cold", () => {
@@ -183,7 +192,6 @@ describe("composerSuggestionCacheIsWarm", () => {
             inputTokens: 1,
             cachedInputTokens: 1,
             promptCacheExpiresAt: "not a date",
-            updatedAt: "also not a date",
           },
         }),
         NOW_MS,

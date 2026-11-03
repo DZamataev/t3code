@@ -6,9 +6,6 @@ import type { MessageId, ProviderThreadId, RunId } from "@t3tools/contracts";
  */
 const MAX_SUGGESTION_PREFIX_TOKENS = 150_000;
 
-/** Anthropic's default prompt-cache lifetime, used when the turn reports no cache expiry. */
-const FALLBACK_CACHE_TTL_MS = 5 * 60_000;
-
 /** Only the fields a suggestion decision reads; the projections carry more. */
 export interface ComposerSuggestionMessage {
   readonly id: MessageId;
@@ -27,7 +24,6 @@ export interface ComposerSuggestionTurn {
         readonly cachedInputTokens?: number | undefined;
         readonly inputTokens?: number | undefined;
         readonly promptCacheExpiresAt?: string | undefined;
-        readonly updatedAt: string;
       }
     | undefined;
 }
@@ -87,23 +83,19 @@ const latestCompletedTurn = (
   );
 
 /**
- * Whether the finished turn left a cache a forked request can still read: the provider reported
- * cache hits, the prefix stays under the cost ceiling, and the cache has not expired.
+ * Whether the finished turn left a cache a forked request can still read. A turn that only wrote
+ * its prefix (the first one after a pause) leaves a warm cache too, so what matters is the lifetime
+ * the provider reported, not whether that turn itself read anything.
  */
 export function composerSuggestionCacheIsWarm(
   turn: ComposerSuggestionTurn,
   nowMs: number,
 ): boolean {
   const usage = turn.tokenUsage;
-  if (usage === undefined) return false;
-  const cachedInputTokens = usage.cachedInputTokens ?? 0;
-  if (cachedInputTokens <= 0) return false;
-  if ((usage.inputTokens ?? 0) + cachedInputTokens > MAX_SUGGESTION_PREFIX_TOKENS) return false;
-  const expiresAt =
-    usage.promptCacheExpiresAt === undefined
-      ? Date.parse(usage.updatedAt) + FALLBACK_CACHE_TTL_MS
-      : Date.parse(usage.promptCacheExpiresAt);
-  return Number.isFinite(expiresAt) && expiresAt > nowMs;
+  if (usage === undefined || usage.promptCacheExpiresAt === undefined) return false;
+  const expiresAt = Date.parse(usage.promptCacheExpiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) return false;
+  return (usage.inputTokens ?? 0) + (usage.cachedInputTokens ?? 0) <= MAX_SUGGESTION_PREFIX_TOKENS;
 }
 
 /**
