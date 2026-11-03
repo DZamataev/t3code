@@ -43,6 +43,8 @@ export class ComposerSuggestionService extends Context.Service<
   }
 >()("t3/composerSuggestion/ComposerSuggestionService") {}
 
+const MISSED_CACHE_COOLDOWN_MS = 60 * 60_000;
+
 const skipUnlessInterrupted = (threadId: ThreadId) => (cause: Cause.Cause<unknown>) =>
   Cause.hasInterruptsOnly(cause)
     ? Effect.interrupt
@@ -54,9 +56,9 @@ const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
   const instances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
   const cache = yield* makeSuggestionCache;
-  // A fork that missed the cache paid for the whole thread and will keep missing: the request no
-  // longer matches the session's. Those threads stop predicting until the server restarts.
-  const uncacheable = yield* Ref.make(new Set<ThreadId>());
+  // A fork that missed the cache paid for the whole thread, and a mismatched request would miss
+  // again on every turn; the cooldown bounds that to one paid miss per thread an hour.
+  const pausedUntil = yield* Ref.make(new Map<ThreadId, number>());
 
   const read: ComposerSuggestionService["Service"]["read"] = Effect.fn(
     "ComposerSuggestionService.read",
@@ -75,13 +77,13 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly runId: RunId;
   }) {
-    if ((yield* Ref.get(uncacheable)).has(input.threadId)) return "";
+    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
+    if (((yield* Ref.get(pausedUntil)).get(input.threadId) ?? 0) > nowMs) return "";
     const records = yield* projections.getThreadRecords(
       input.threadId,
       ["messages", "providerTurns", "providerThreads"],
       { messageRoles: ["assistant"] },
     );
-    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const target = composerSuggestionTarget(records, input.runId, nowMs);
     if (target === null) return "";
     const providerThread = records.providerThreads.find(
@@ -98,7 +100,9 @@ const make = Effect.gen(function* () {
       instruction: COMPOSER_SUGGESTION_INSTRUCTION,
     });
     if (composerSuggestionForkMissedCache(result.cachedInputTokens, target.promptTokens)) {
-      yield* Ref.update(uncacheable, (current) => new Set(current).add(input.threadId));
+      yield* Ref.update(pausedUntil, (current) =>
+        new Map(current).set(input.threadId, nowMs + MISSED_CACHE_COOLDOWN_MS),
+      );
       yield* Effect.logWarning("composer suggestion missed the prompt cache; thread paused", {
         threadId: input.threadId,
         cachedInputTokens: result.cachedInputTokens,

@@ -69,6 +69,9 @@ const latestCompletedTurn = (
     undefined,
   );
 
+/** A fork takes seconds to reach the provider; a cache about to expire would be gone by then. */
+const CACHE_EXPIRY_MARGIN_MS = 30_000;
+
 /**
  * Whether the finished turn left a cache a forked request can still read. A turn that only wrote
  * its prefix (the first one after a pause) leaves a warm cache too, so what matters is the lifetime
@@ -81,7 +84,7 @@ export function composerSuggestionCacheIsWarm(
   const usage = turn.tokenUsage;
   if (usage === undefined || usage.promptCacheExpiresAt === undefined) return false;
   const expiresAt = Date.parse(usage.promptCacheExpiresAt);
-  return Number.isFinite(expiresAt) && expiresAt > nowMs;
+  return Number.isFinite(expiresAt) && expiresAt - nowMs > CACHE_EXPIRY_MARGIN_MS;
 }
 
 /**

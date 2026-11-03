@@ -142,8 +142,10 @@ describe("composerSuggestionCacheIsWarm", () => {
     ).toBe(true);
   });
 
-  it("stops once the reported cache expires", () => {
+  it("stops once the reported cache expires or is about to", () => {
     expect(composerSuggestionCacheIsWarm(turn(), NOW_MS + 180_000)).toBe(false);
+    expect(composerSuggestionCacheIsWarm(turn(), NOW_MS + 100_000)).toBe(false);
+    expect(composerSuggestionCacheIsWarm(turn(), NOW_MS + 80_000)).toBe(true);
   });
 
   it("treats a turn with no reported cache lifetime as cold", () => {

@@ -162,8 +162,8 @@ finishes, while the provider's prompt cache still holds that conversation: the
 whole thread is read from cache at a fraction of the input price, so a long
 thread costs more per suggestion than a short one. Other providers, subagent and
 archived threads, and turns whose cache has already expired get no suggestion. A
-thread whose prediction misses the cache anyway stops predicting until the
-server restarts. Turn it on in Settings → Labs → Reply suggestions.
+thread whose prediction misses the cache anyway pauses suggestions for an
+hour. Turn it on in Settings → Labs → Reply suggestions.
 
 ## Edit an earlier prompt
 
