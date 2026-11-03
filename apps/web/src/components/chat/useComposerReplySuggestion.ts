@@ -1,7 +1,7 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { replySuggestionVisible } from "../../composerReplySuggestion";
+import { replySuggestionShouldRead, replySuggestionVisible } from "../../composerReplySuggestion";
 import { orchestrationEnvironment } from "~/state/orchestration";
 import { useAtomCommand } from "~/state/use-atom-command";
 
@@ -33,13 +33,18 @@ export function useComposerReplySuggestion(input: {
   // A suggestion belongs to one turn and one thread: both replace everything known about it.
   const [knownThread, setKnownThread] = useState(threadId);
   const [wasBusy, setWasBusy] = useState(busy);
+  // A sent message ends the turn the shown suggestion belonged to, and the next turn has not
+  // produced one yet: reading now would resurrect the previous turn's text for a moment.
+  const [awaitingTurn, setAwaitingTurn] = useState(false);
   if (knownThread !== threadId) {
     setKnownThread(threadId);
+    setAwaitingTurn(false);
     setText("");
     setDismissedText(null);
   }
   if (wasBusy !== busy) {
     setWasBusy(busy);
+    setAwaitingTurn(false);
     if (busy) {
       setText("");
       setDismissedText(null);
@@ -53,7 +58,18 @@ export function useComposerReplySuggestion(input: {
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the read answers after the composer may have gained text or changed threads; the cleanup drops it instead of syncing state
   useEffect(() => {
-    if (!enabled || threadId === null || busy || !empty || text !== "" || inFlightRef.current) {
+    if (threadId === null) return;
+    if (
+      !replySuggestionShouldRead({
+        awaitingTurn,
+        busy,
+        empty,
+        enabled,
+        inFlight: inFlightRef.current,
+        text,
+        threadId,
+      })
+    ) {
       return;
     }
     let cancelled = false;
@@ -66,7 +82,7 @@ export function useComposerReplySuggestion(input: {
     return () => {
       cancelled = true;
     };
-  }, [busy, empty, enabled, text, threadId]);
+  }, [awaitingTurn, busy, empty, enabled, text, threadId]);
 
   const visible = replySuggestionVisible({ busy, dismissedText, empty, text });
 
@@ -81,6 +97,7 @@ export function useComposerReplySuggestion(input: {
   };
 
   const onSent = () => {
+    setAwaitingTurn(true);
     setText("");
     setDismissedText(null);
   };

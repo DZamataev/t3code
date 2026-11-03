@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   isReplySuggestionAcceptKey,
+  replySuggestionShouldRead,
   replySuggestionVisible,
   type ReplySuggestionVisibility,
 } from "./composerReplySuggestion";
@@ -65,5 +66,39 @@ describe("isReplySuggestionAcceptKey", () => {
     expect(isReplySuggestionAcceptKey(key({ key: "ArrowRight", altKey: true }))).toBe(false);
     expect(isReplySuggestionAcceptKey(key({ key: "ArrowLeft" }))).toBe(false);
     expect(isReplySuggestionAcceptKey(key({ key: "Enter" }))).toBe(false);
+  });
+});
+
+const readable = (over: Partial<Parameters<typeof replySuggestionShouldRead>[0]> = {}): boolean =>
+  replySuggestionShouldRead({
+    awaitingTurn: false,
+    busy: false,
+    empty: true,
+    enabled: true,
+    inFlight: false,
+    text: "",
+    threadId: "thread-1",
+    ...over,
+  });
+
+describe("replySuggestionShouldRead", () => {
+  it("reads an idle, empty composer with nothing to show", () => {
+    expect(readable()).toBe(true);
+  });
+
+  it("does not read right after a send, before the turn starts", () => {
+    expect(readable({ awaitingTurn: true })).toBe(false);
+  });
+
+  it("does not read while a turn runs, while a request is out, or with text to keep", () => {
+    expect(readable({ busy: true })).toBe(false);
+    expect(readable({ inFlight: true })).toBe(false);
+    expect(readable({ text: "Run the tests" })).toBe(false);
+    expect(readable({ empty: false })).toBe(false);
+  });
+
+  it("does not read without a thread or with the feature off", () => {
+    expect(readable({ threadId: null })).toBe(false);
+    expect(readable({ enabled: false })).toBe(false);
   });
 });

@@ -31,3 +31,27 @@ export const isReplySuggestionAcceptKey = (event: {
   !event.metaKey &&
   !event.ctrlKey &&
   !event.altKey;
+
+/**
+ * Whether the composer may ask for a suggestion now. A send sets `awaitingTurn`: the turn has not
+ * started on the server yet, so a read here would bring back the previous turn's text for a moment.
+ */
+export function replySuggestionShouldRead(state: {
+  readonly awaitingTurn: boolean;
+  readonly busy: boolean;
+  readonly empty: boolean;
+  readonly enabled: boolean;
+  readonly inFlight: boolean;
+  readonly text: string;
+  readonly threadId: string | null;
+}): boolean {
+  return (
+    state.enabled &&
+    state.threadId !== null &&
+    !state.busy &&
+    !state.awaitingTurn &&
+    state.empty &&
+    state.text === "" &&
+    !state.inFlight
+  );
+}
