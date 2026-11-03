@@ -161,7 +161,7 @@ brings it back.
 The prediction runs on the thread's own Claude model immediately after a turn
 finishes, while the provider's prompt cache still covers that conversation, so
 it costs only the new text. Other providers, subagent and archived threads,
-threads whose context has grown past 60k tokens, and turns whose cache has
+threads whose context has grown past 150k tokens, and turns whose cache has
 already expired get no suggestion instead. Turn it on in Settings → Labs →
 Reply suggestions.
 

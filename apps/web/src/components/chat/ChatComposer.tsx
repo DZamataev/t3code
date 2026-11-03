@@ -1827,7 +1827,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     enabled:
       settings.composerReplySuggestions && activeThread !== undefined && !projectSelectionRequired,
     environmentId,
-    threadId: activeThread?.id ?? null,
+    // A draft has no server thread yet, so there is nothing to have predicted.
+    threadId: routeKind === "draft" ? null : (activeThread?.id ?? null),
     writeDraft: writeReplySuggestionDraft,
   });
 

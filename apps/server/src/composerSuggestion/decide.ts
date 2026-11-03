@@ -1,10 +1,10 @@
 import type { MessageId, ProviderThreadId, RunId } from "@t3tools/contracts";
 
 /**
- * A forked turn reads the whole thread prefix at the cache-read rate, so a long thread costs real
- * money per suggestion. Past this prefix a turn predicts nothing.
+ * The thread's Claude prefix (tools and system prompt are ~36k on their own) is read from cache, so
+ * a suggestion costs a tenth of it; past this ceiling one turn predicts nothing.
  */
-const MAX_SUGGESTION_PREFIX_TOKENS = 60_000;
+const MAX_SUGGESTION_PREFIX_TOKENS = 150_000;
 
 /** Anthropic's default prompt-cache lifetime, used when the turn reports no cache expiry. */
 const FALLBACK_CACHE_TTL_MS = 5 * 60_000;

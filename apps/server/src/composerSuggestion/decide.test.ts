@@ -149,7 +149,7 @@ describe("composerSuggestionCacheIsWarm", () => {
         turn({
           tokenUsage: {
             inputTokens: 10_000,
-            cachedInputTokens: 60_001,
+            cachedInputTokens: 150_001,
             promptCacheExpiresAt: "2026-11-03T12:02:00.000Z",
             updatedAt: "2026-11-03T12:00:00.000Z",
           },

@@ -8,6 +8,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
@@ -34,18 +35,14 @@ const SUGGESTION_TTL_MS = 15 * 60_000;
 /** Threads kept in memory; older entries fall out first. */
 const MAX_CACHED_THREADS = 200;
 
+/** A read that arrives while this thread's prediction is still running waits this long for it. */
+const SUGGESTION_WAIT_MS = 20_000;
+
 interface CachedSuggestion {
   readonly messageId: MessageId;
   readonly text: string;
   readonly storedAt: number;
 }
-
-const replyError = (threadId: ThreadId, cause: unknown) =>
-  new OrchestrationV2SuggestComposerReplyError({
-    threadId,
-    message: "Failed to read the composer suggestion",
-    cause,
-  });
 
 /**
  * Predicts the user's next message after each completed turn by forking the finished session, so
@@ -85,31 +82,71 @@ const make = Effect.gen(function* () {
       return next;
     });
 
-  const read: ComposerSuggestionService["Service"]["read"] = Effect.fn(
-    "ComposerSuggestionService.read",
-  )(function* (input) {
-    const current = yield* settings.getSettings.pipe(
-      Effect.mapError((cause) => replyError(input.threadId, cause)),
-    );
-    if (!current.composerReplySuggestions) return { text: "" };
-    const records = yield* projections
-      .getThreadRecords(input.threadId, ["messages"], { messageRoles: ["assistant"] })
-      .pipe(Effect.mapError((cause) => replyError(input.threadId, cause)));
-    const reply = lastAssistantReply(records.messages);
-    if (reply === undefined) return { text: "" };
-    const cached = (yield* Ref.get(cache)).get(input.threadId);
-    if (cached === undefined || cached.messageId !== reply.id) return { text: "" };
-    const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
-    if (nowMs - cached.storedAt > SUGGESTION_TTL_MS) return { text: "" };
-    return { text: cached.text };
+  // A prediction takes seconds; a read that arrives first waits for it instead of answering
+  // "nothing" and leaving the composer empty until the next turn.
+  const pending = yield* Ref.make(new Map<ThreadId, Deferred.Deferred<void>>());
+
+  const beginPrediction = Effect.fn("ComposerSuggestionService.beginPrediction")(function* (
+    threadId: ThreadId,
+  ) {
+    const gate = yield* Deferred.make<void>();
+    const previous = yield* Ref.modify(pending, (current) => {
+      const next = new Map(current);
+      const replaced = next.get(threadId);
+      next.set(threadId, gate);
+      return [replaced, next] as const;
+    });
+    if (previous !== undefined) yield* Deferred.succeed(previous, undefined);
+    return gate;
   });
 
-  const suggest = Effect.fn("ComposerSuggestionService.suggest")(function* (input: {
+  const endPrediction = (threadId: ThreadId, gate: Deferred.Deferred<void>) =>
+    Ref.update(pending, (current) => {
+      if (current.get(threadId) !== gate) return current;
+      const next = new Map(current);
+      next.delete(threadId);
+      return next;
+    }).pipe(Effect.andThen(Deferred.succeed(gate, undefined)), Effect.asVoid);
+
+  const read: ComposerSuggestionService["Service"]["read"] = Effect.fn(
+    "ComposerSuggestionService.read",
+  )(
+    function* (input) {
+      const current = yield* settings.getSettings;
+      if (!current.composerReplySuggestions) return { text: "" };
+      const records = yield* projections.getThreadRecords(input.threadId, ["messages"], {
+        messageRoles: ["assistant"],
+      });
+      const reply = lastAssistantReply(records.messages);
+      if (reply === undefined) return { text: "" };
+      const settled = (yield* Ref.get(cache)).get(input.threadId);
+      if (
+        settled !== undefined &&
+        settled.messageId === reply.id &&
+        DateTime.toEpochMillis(yield* DateTime.now) - settled.storedAt <= SUGGESTION_TTL_MS
+      ) {
+        return { text: settled.text };
+      }
+      const gate = (yield* Ref.get(pending)).get(input.threadId);
+      if (gate === undefined) return { text: "" };
+      // The prediction for this turn is still running: answer with its result, not with "none yet".
+      yield* Deferred.await(gate).pipe(Effect.timeoutOption(SUGGESTION_WAIT_MS));
+      const late = (yield* Ref.get(cache)).get(input.threadId);
+      return late !== undefined &&
+        late.messageId === reply.id &&
+        DateTime.toEpochMillis(yield* DateTime.now) - late.storedAt <= SUGGESTION_TTL_MS
+        ? { text: late.text }
+        : { text: "" };
+    },
+    Effect.catchCause((cause) =>
+      Effect.logDebug("composer suggestion read skipped", { cause }).pipe(Effect.as({ text: "" })),
+    ),
+  );
+
+  const predict = Effect.fn("ComposerSuggestionService.predict")(function* (input: {
     readonly threadId: ThreadId;
     readonly runId: RunId;
   }) {
-    const current = yield* settings.getSettings;
-    if (!current.composerReplySuggestions) return;
     const records = yield* projections.getThreadRecords(
       input.threadId,
       ["messages", "providerTurns", "providerThreads"],
@@ -140,6 +177,16 @@ const make = Effect.gen(function* () {
       });
     }
     yield* store(input.threadId, target.reply.id, verdict.text, nowMs);
+  });
+
+  const suggest = Effect.fn("ComposerSuggestionService.suggest")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly runId: RunId;
+  }) {
+    const current = yield* settings.getSettings;
+    if (!current.composerReplySuggestions) return;
+    const gate = yield* beginPrediction(input.threadId);
+    yield* predict(input).pipe(Effect.ensuring(endPrediction(input.threadId, gate)));
   });
 
   const start: ComposerSuggestionService["Service"]["start"] = Effect.fn(
