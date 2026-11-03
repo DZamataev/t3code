@@ -10,8 +10,14 @@ const SUGGESTION_TTL_MS = 15 * 60_000;
 /** Threads kept in memory; older entries fall out first. */
 const MAX_CACHED_THREADS = 200;
 
-/** A read that arrives while its run's prediction is still running waits this long for it. */
-const SUGGESTION_WAIT_MS = 20_000;
+/** The longest a prediction may run; a cold CLI start alone has taken over 20 s. */
+export const PREDICTION_CEILING_MS = 90_000;
+
+/**
+ * Outlasts the prediction it waits for: a read that gave up early would answer "nothing", and the
+ * client asks about each run only once.
+ */
+const SUGGESTION_WAIT_MS = PREDICTION_CEILING_MS + 5_000;
 
 /** The client can see a finished run before the server's own subscriber starts predicting it. */
 const SUGGESTION_START_GRACE_MS = 2_000;

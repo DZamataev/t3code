@@ -22,7 +22,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import { composerSuggestionForkMissedCache, composerSuggestionTarget } from "./decide.ts";
 import { cleanComposerSuggestion } from "./filter.ts";
 import { COMPOSER_SUGGESTION_INSTRUCTION } from "./instruction.ts";
-import { makeSuggestionCache } from "./suggestionCache.ts";
+import { makeSuggestionCache, PREDICTION_CEILING_MS } from "./suggestionCache.ts";
 
 /**
  * Predicts the user's next message after each completed run by forking the finished session, so
@@ -132,6 +132,7 @@ const make = Effect.gen(function* () {
                   event.threadId,
                   event.payload.id,
                   predict({ threadId: event.threadId, runId: event.payload.id }).pipe(
+                    Effect.timeout(PREDICTION_CEILING_MS),
                     Effect.catchCause((cause) =>
                       skipUnlessInterrupted(event.threadId)(cause).pipe(Effect.as("")),
                     ),

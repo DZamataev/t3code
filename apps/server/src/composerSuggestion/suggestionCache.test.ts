@@ -34,7 +34,7 @@ describe("suggestion cache", () => {
     }),
   );
 
-  it.effect("waits for a prediction that starts after the read", () =>
+  it.effect("waits for a slow prediction that starts after the read", () =>
     Effect.gen(function* () {
       const cache = yield* makeSuggestionCache;
       const reader = yield* cache.read(threadId, firstRun).pipe(Effect.forkChild);
@@ -42,6 +42,8 @@ describe("suggestion cache", () => {
       yield* cache.track(threadId, firstRun, held.predict).pipe(Effect.forkChild);
       yield* Deferred.await(held.started);
       yield* TestClock.adjust("100 millis");
+      // A cold CLI start alone has taken over 20 s.
+      yield* TestClock.adjust("40 seconds");
       yield* Deferred.succeed(held.answer, "Commit this");
 
       assert.equal(yield* Fiber.join(reader), "Commit this");
