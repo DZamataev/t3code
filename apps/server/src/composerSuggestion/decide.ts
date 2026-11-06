@@ -1,4 +1,10 @@
-import type { MessageId, ProviderThreadId, RunId } from "@t3tools/contracts";
+import type {
+  MessageId,
+  OrchestrationV2PendingBackgroundTask,
+  ProviderThreadId,
+  RunId,
+} from "@t3tools/contracts";
+import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 
 /** Only the fields a suggestion decision reads; the projections carry more. */
 export interface ComposerSuggestionMessage {
@@ -32,6 +38,10 @@ export interface ComposerSuggestionRecords {
     readonly archivedAt: unknown;
     readonly activeProviderThreadId: ProviderThreadId | null;
     readonly lineage: { readonly relationshipToParent: string | null };
+    /** Work the agent started and will be woken by, from the thread shell. */
+    readonly pendingBackgroundTasks: ReadonlyArray<
+      Pick<OrchestrationV2PendingBackgroundTask, "kind" | "awaited">
+    >;
   };
   readonly messages: ReadonlyArray<ComposerSuggestionMessage>;
   readonly providerTurns: ReadonlyArray<ComposerSuggestionTurn>;
@@ -99,7 +109,8 @@ export const composerSuggestionForkMissedCache = (
 
 /**
  * The turn a suggestion would follow, or null when predicting it is pointless or unsafe: no
- * assistant reply, no live native session, or a cache that is cold or unreported.
+ * assistant reply, an agent that will carry on by itself once its own background work reports,
+ * no live native session, or a cache that is cold or unreported.
  */
 export function composerSuggestionTarget(
   records: ComposerSuggestionRecords,
@@ -113,6 +124,7 @@ export function composerSuggestionTarget(
 } | null {
   const thread = records.thread;
   if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") return null;
+  if (backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks)) return null;
   const reply = lastAssistantReplyOfRun(records.messages, runId);
   if (reply === undefined) return null;
   const providerThread = records.providerThreads.find(

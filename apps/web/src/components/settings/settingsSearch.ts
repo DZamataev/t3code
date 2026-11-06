@@ -487,6 +487,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta ghost text composer predict next message suggestion autocomplete reply"],
   },
   {
+    id: "composer-reply-suggestion-instruction",
+    title: "Reply suggestion prompt",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta ghost text composer predict next message suggestion prompt instruction"],
+  },
+  {
     id: "simlock-hosts",
     title: "Simlock device hosts (alpha)",
     to: "/settings/labs",

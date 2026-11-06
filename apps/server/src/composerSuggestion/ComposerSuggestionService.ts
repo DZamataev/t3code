@@ -1,4 +1,5 @@
 import {
+  DEFAULT_COMPOSER_REPLY_SUGGESTION_INSTRUCTION,
   OrchestrationV2SuggestComposerReplyError,
   type OrchestrationV2SuggestComposerReplyResult,
   type RunId,
@@ -21,7 +22,6 @@ import { forkParked } from "../serverActivation.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { composerSuggestionForkMissedCache, composerSuggestionTarget } from "./decide.ts";
 import { cleanComposerSuggestion } from "./filter.ts";
-import { COMPOSER_SUGGESTION_INSTRUCTION } from "./instruction.ts";
 import { makeSuggestionCache, PREDICTION_CEILING_MS } from "./suggestionCache.ts";
 
 /**
@@ -84,7 +84,15 @@ const make = Effect.gen(function* () {
       ["messages", "providerTurns", "providerThreads"],
       { messageRoles: ["assistant"] },
     );
-    const target = composerSuggestionTarget(records, input.runId, nowMs);
+    const shell = yield* projections.getThreadShell(input.threadId);
+    const target = composerSuggestionTarget(
+      {
+        ...records,
+        thread: { ...records.thread, pendingBackgroundTasks: shell?.pendingBackgroundTasks ?? [] },
+      },
+      input.runId,
+      nowMs,
+    );
     if (target === null) return "";
     const providerThread = records.providerThreads.find(
       (candidate) => candidate.id === target.providerThreadId,
@@ -97,7 +105,9 @@ const make = Effect.gen(function* () {
     const result = yield* suggestReply.call(adapter, {
       threadId: input.threadId,
       providerThread,
-      instruction: COMPOSER_SUGGESTION_INSTRUCTION,
+      instruction:
+        (yield* settings.getSettings).composerReplySuggestionInstruction ||
+        DEFAULT_COMPOSER_REPLY_SUGGESTION_INSTRUCTION,
     });
     if (composerSuggestionForkMissedCache(result.cachedInputTokens, target.promptTokens)) {
       yield* Ref.update(pausedUntil, (current) =>

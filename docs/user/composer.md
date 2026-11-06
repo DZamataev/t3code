@@ -161,9 +161,14 @@ The prediction runs on the thread's own Claude model right after a turn
 finishes, while the provider's prompt cache still holds that conversation: the
 whole thread is read from cache at a fraction of the input price, so a long
 thread costs more per suggestion than a short one. Other providers, subagent and
-archived threads, and turns whose cache has already expired get no suggestion. A
-thread whose prediction misses the cache anyway pauses suggestions for an
-hour. Turn it on in Settings → Labs → Reply suggestions.
+archived threads, turns whose cache has already expired, and turns that end
+while the agent waits for its own background work or subagents get no
+suggestion. A thread whose prediction misses the cache anyway pauses
+suggestions for an hour.
+
+Turn it on in Settings → Labs → Reply suggestions. Once it is on, Reply
+suggestion prompt below it holds the request the model answers; edit it to
+change what gets suggested, or reset it to the built-in prompt.
 
 ## Edit an earlier prompt
 

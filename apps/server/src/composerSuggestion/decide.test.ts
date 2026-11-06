@@ -54,6 +54,7 @@ const records = (
     archivedAt: null,
     activeProviderThreadId: providerThreadId,
     lineage: { relationshipToParent: null },
+    pendingBackgroundTasks: [],
     ...over.thread,
   },
   messages: over.messages ?? [userMessage, reply()],
@@ -86,6 +87,17 @@ describe("composerSuggestionTarget", () => {
   it("skips archived threads and subagent threads", () => {
     expect(target({ thread: { archivedAt: "2026-11-03T12:00:00.000Z" } })).toBeNull();
     expect(target({ thread: { lineage: { relationshipToParent: "subagent" } } })).toBeNull();
+  });
+
+  it("stays silent while the agent waits for work it will be woken by", () => {
+    expect(target({ thread: { pendingBackgroundTasks: [{ kind: "subagent" }] } })).toBeNull();
+    expect(
+      target({ thread: { pendingBackgroundTasks: [{ kind: "command", awaited: true }] } }),
+    ).toBeNull();
+    // A dev server left running is not something the agent waits on.
+    expect(target({ thread: { pendingBackgroundTasks: [{ kind: "command" }] } })?.reply.id).toBe(
+      "message-reply",
+    );
   });
 
   it("needs the thread's live native session", () => {
