@@ -16662,3 +16662,124 @@ describe("ClaudeAdapterV2 query message stream", () => {
     }),
   );
 });
+
+describe("ClaudeAdapterV2 composer reply suggestion", () => {
+  const forkFrame = (frame: Record<string, unknown>): SDKMessage => {
+    if (typeof frame.type !== "string") throw new Error("Frame is not a Claude Agent SDK message.");
+    return frame as SDKMessage;
+  };
+  const usage = (cacheRead: number) => ({
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: cacheRead,
+  });
+  const result = (input: { readonly numTurns: number; readonly fromNotification: boolean }) =>
+    forkFrame({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: input.numTurns,
+      result: "",
+      usage: usage(0),
+      ...(input.fromNotification ? { origin: { kind: "task-notification" } } : {}),
+    });
+
+  it.effect("answers after a background task's replayed notification", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const forkMessages: ReadonlyArray<SDKMessage> = [
+          // The fork reports the parent's running task as orphaned and closes it without a turn.
+          forkFrame({ type: "system", subtype: "task_notification", status: "stopped" }),
+          forkFrame({ type: "system", subtype: "init" }),
+          result({ numTurns: 0, fromNotification: true }),
+          forkFrame({
+            type: "assistant",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "run the tests" }],
+              usage: usage(263_304),
+            },
+          }),
+          result({ numTurns: 1, fromNotification: false }),
+          forkFrame({ type: "assistant", message: { role: "assistant", content: [] } }),
+        ];
+        let opens = 0;
+        const adapter = yield* ClaudeAdapterV2.makeClaudeAdapterV2({
+          instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
+          settings: DEFAULT_CLAUDE_SETTINGS,
+          environment: {},
+          attachmentsDir: yield* fileSystem.makeTempDirectoryScoped({
+            prefix: "t3-claude-suggest-",
+          }),
+          fileSystem,
+          path: yield* Path.Path,
+          crypto: yield* Crypto.Crypto,
+          idAllocator: yield* IdAllocator.IdAllocatorV2,
+          queryRunner: {
+            allocateSessionId: Effect.succeed("native-thread-claude-suggest"),
+            open: () =>
+              Effect.sync(() => {
+                opens += 1;
+                return {
+                  messages: opens === 1 ? Stream.never : Stream.fromIterable(forkMessages),
+                  offer: () => Effect.void,
+                  setModel: () => Effect.void,
+                  applyFlagSettings: () => Effect.void,
+                  setPermissionMode: () => Effect.void,
+                  backgroundTasks: () => Effect.succeed(false),
+                  stopTask: () => Effect.void,
+                  interrupt: Effect.void,
+                  close: Effect.void,
+                };
+              }),
+            forkSession: () => Effect.die("unused"),
+            subagentLaunchToolUseId: () => Effect.succeed(null),
+            assertComplete: Effect.void,
+          },
+        });
+        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-claude-suggest-cwd-" }),
+        });
+        const threadId = ThreadId.make("thread-claude-suggest");
+        const runtime = yield* adapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make("provider-session-claude-suggest"),
+          modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+          runtimePolicy,
+        });
+        const providerThread = yield* runtime.ensureThread({
+          threadId,
+          modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+          runtimePolicy,
+        });
+        yield* runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId,
+            providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make("attempt-claude-suggest"),
+            text: "Run the build in the background.",
+            attachments: [],
+            runtimePolicy,
+          }),
+        );
+
+        const suggestion = yield* adapter.suggestComposerReply!({
+          threadId,
+          providerThread,
+          instruction: "Predict the next message.",
+        });
+
+        assert.deepEqual(suggestion, { text: "run the tests", cachedInputTokens: 263_304 });
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+    ),
+  );
+});
