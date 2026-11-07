@@ -11698,14 +11698,17 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             parent_tool_use_id: null,
           });
           return yield* session.messages.pipe(
-            // A tool call ends the prediction: the callback denies it, and closing the query
-            // stops the CLI from looping on the denial.
+            // A fork of a session with a running background task first reports that task as
+            // orphaned and closes the notification with its own result; the instruction's
+            // result comes after it. A tool call ends the prediction: the callback denies it,
+            // and closing the query stops the CLI from looping on the denial.
             Stream.takeUntil(
               (message) =>
-                message.type === "result" ||
+                (message.type === "result" && !isClaudeTaskNotificationOriginResult(message)) ||
                 (message.type === "assistant" &&
                   message.message.content.some(isClaudeToolUseContentBlock)),
             ),
+            // Only a model reply proves a request was sent; a result without one reports zeros.
             Stream.runFold(
               (): { text: string; cachedInputTokens: number | undefined } => none,
               (acc, message) =>
@@ -11715,12 +11718,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       cachedInputTokens:
                         message.message.usage?.cache_read_input_tokens ?? acc.cachedInputTokens,
                     }
-                  : message.type === "result"
-                    ? {
-                        text: acc.text,
-                        cachedInputTokens:
-                          message.usage.cache_read_input_tokens ?? acc.cachedInputTokens,
-                      }
+                  : isClaudeTaskNotificationOriginResult(message)
+                    ? { ...acc, text: "" }
                     : acc,
             ),
           );
