@@ -4,10 +4,13 @@ import * as ClaudeSdk from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeSettings, type ServerProvider } from "@t3tools/contracts";
 import { vi } from "vite-plus/test";
 import { assert, describe, expect, it } from "@effect/vitest";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import * as TestClock from "effect/testing/TestClock";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http";
 
 import {
   buildClaudeCapabilitiesProbeQueryOptions,
@@ -266,3 +269,45 @@ describe("Claude usage limits endpoint", () => {
     }),
   );
 });
+
+it.effect("keeps the probe subprocess alive while gateway model discovery can finish", () =>
+  Effect.gen(function* () {
+    let abortSignal: AbortSignal | undefined;
+    const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(({ options }) => {
+      abortSignal = options?.abortController?.signal;
+      return {
+        initializationResult: async () => ({
+          account: { email: "dev@example.com", subscriptionType: "pro", tokenSource: "oauth" },
+          commands: [{ name: "review", description: "Review changes", argumentHint: "[path]" }],
+          models: [{ value: "gateway/claude-relay", displayName: "Relay", description: "" }],
+        }),
+        usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: () =>
+          new Promise((_, reject) => reject(new Error("usage unavailable"))),
+      } as ReturnType<typeof ClaudeSdk.query>;
+    });
+    yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
+    const fileSystem = yield* FileSystem.FileSystem;
+    const configDir = yield* fileSystem.makeTempDirectoryScoped();
+    // Claude Code also reads these from settings.json, which is where gateway users set them.
+    yield* fileSystem.writeFileString(
+      `${configDir}/settings.json`,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: "https://gateway.example",
+          CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+        },
+      }),
+    );
+    const capabilities = yield* probeClaudeCapabilities(
+      yield* decodeClaudeSettings({ binaryPath: "claude" }),
+      { PATH: (yield* HostProcess.Environment).PATH, CLAUDE_CONFIG_DIR: configDir },
+    );
+    assert.deepEqual(
+      capabilities.models?.map((model) => model.value),
+      ["gateway/claude-relay"],
+    );
+    assert.equal(abortSignal?.aborted, false);
+    yield* TestClock.adjust("3 seconds");
+    assert.equal(abortSignal?.aborted, true);
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer))),
+);
