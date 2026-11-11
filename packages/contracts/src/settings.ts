@@ -1198,32 +1198,6 @@ export const StorageCleanupSettings = Schema.Struct({
 });
 export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
-/**
- * The user-role request appended to a forked Claude session to predict the user's next message.
- * The fork reuses the conversation's prompt cache, so this text is the only new input; the model
- * answers with the message or NONE.
- */
-export const DEFAULT_COMPOSER_REPLY_SUGGESTION_INSTRUCTION = [
-  "[Composer prediction request from the app, not a message from the user. Do not answer the user, continue the task, or call tools.]",
-  "",
-  'Predict what the USER would type next, not what you think they should do. The test: would they think "I was just about to type that"?',
-  "",
-  "Start from the user's original request and their recent messages.",
-  '- They asked for several steps and one is done: the next step ("run the tests").',
-  '- Code was just written: "try it out".',
-  "- The assistant offered options: the one this user would pick, judging by the conversation.",
-  '- The assistant asked whether to continue: "yes" or "go ahead".',
-  '- The task is complete with an obvious follow-up: "commit this", "push it".',
-  "- The question or proposal waiting on the user can sit anywhere in the assistant's last message, not only at its end. A message that closes with what the assistant will do once approved is asking for approval.",
-  "- After an error or a misunderstanding: stay silent, they need to assess it themselves.",
-  "- The assistant is waiting for its own background work (tests, builds, other agents) and will continue without the user: stay silent.",
-  'Be specific: "run the tests" beats "continue".',
-  "",
-  'Never suggest: praise or thanks ("looks good"), an acknowledgment that asks for nothing ("ok", "waiting", "got it"), a question, anything in the assistant\'s voice ("Let me...", "I\'ll...", "Here\'s..."), a new idea the user did not ask about, or more than one sentence. Stay silent when the next step is not obvious from what the user said, or when the suggestion could be unsafe or touches credentials, private data, or security incidents.',
-  "",
-  "Format: 2-12 words in the user's own language and style. Output only the message text: no role label, no quotes, no explanation. To stay silent, output exactly NONE.",
-].join("\n");
-
 export const ServerSettings = Schema.Struct({
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1319,16 +1293,6 @@ export const ServerSettings = Schema.Struct({
    * and tasks on another machine; tasks already running there finish.
    */
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  /**
-   * Beta: predict the user's next message after a completed turn and show it as ghost text in an
-   * empty composer. The prediction reads the whole thread from the turn's prompt cache right
-   * after it commits; off spends nothing.
-   */
-  composerReplySuggestions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  /** Replaces {@link DEFAULT_COMPOSER_REPLY_SUGGESTION_INSTRUCTION} when not empty. */
-  composerReplySuggestionInstruction: TrimmedString.pipe(
-    Schema.withDecodingDefault(Effect.succeed("")),
-  ),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -1710,8 +1674,6 @@ export const ServerSettingsPatch = Schema.Struct({
   hideTaggedThreads: Schema.optionalKey(Schema.Boolean),
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
-  composerReplySuggestions: Schema.optionalKey(Schema.Boolean),
-  composerReplySuggestionInstruction: Schema.optionalKey(TrimmedString),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),

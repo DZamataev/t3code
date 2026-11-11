@@ -1,30 +1,16 @@
 import { useAuth } from "@clerk/react";
 import { Link } from "@tanstack/react-router";
-import {
-  DEFAULT_COMPOSER_REPLY_SUGGESTION_INSTRUCTION,
-  managedCapabilityDenial,
-} from "@t3tools/contracts";
-import { useRef } from "react";
+import { managedCapabilityDenial } from "@t3tools/contracts";
 
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
-import { Textarea } from "../ui/textarea";
 import { ScopedSwitch } from "./ScopedSwitch";
-import {
-  SettingResetButton,
-  SettingsPageContainer,
-  SettingsRow,
-  SettingsSection,
-} from "./settingsLayout";
+import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { LegacyFeaturesSection } from "./SettingsPanels";
-import {
-  useScopedSettings,
-  useScopedSettingsMixed,
-  useUpdateScopedSettings,
-} from "./useScopedSettings";
+import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 import { useOptionalSettingsScope } from "./SettingsScopeContext";
 import { firstManagedDenial, usePrimaryManagedPolicy } from "~/state/managedPolicy";
 
@@ -38,8 +24,6 @@ export function LabsSettingsPanel() {
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
-        <ComposerReplySuggestionsRow />
-        <ComposerReplySuggestionInstructionRow />
         <SimlockHostsRow />
       </SettingsSection>
       <LegacyFeaturesSection />
@@ -177,78 +161,6 @@ function LinkedEnvironmentsRow() {
         />
       }
     />
-  );
-}
-
-function ComposerReplySuggestionsRow() {
-  const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
-  return (
-    <SettingsRow
-      serverScoped
-      {...searchableSetting("composer-reply-suggestions")}
-      settingKeys={["composerReplySuggestions"]}
-      description="After a Claude turn finishes, predict your next message and show it as ghost text in an empty composer: Tab or Right arrow fills the draft, Esc hides it. The prediction reads the thread from the finished turn's prompt cache, so it never runs once that cache is gone."
-      control={
-        <ScopedSwitch
-          settingKeys={["composerReplySuggestions"]}
-          checked={settings.composerReplySuggestions}
-          onCheckedChange={(checked) =>
-            updateSettings({ composerReplySuggestions: Boolean(checked) })
-          }
-          aria-label="Reply suggestions"
-        />
-      }
-    />
-  );
-}
-
-function ComposerReplySuggestionInstructionRow() {
-  const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
-  const mixed = useScopedSettingsMixed(["composerReplySuggestionInstruction"]);
-  const edited = useRef(false);
-  if (!settings.composerReplySuggestions) return null;
-  const custom = settings.composerReplySuggestionInstruction;
-  return (
-    <SettingsRow
-      serverScoped
-      {...searchableSetting("composer-reply-suggestion-instruction")}
-      settingKeys={["composerReplySuggestionInstruction"]}
-      description="The request Claude answers to predict your next message. Its reply is the suggestion, or NONE for no suggestion."
-      resetAction={
-        mixed || custom !== "" ? (
-          <SettingResetButton
-            label="reply suggestion prompt"
-            onClick={() => updateSettings({ composerReplySuggestionInstruction: "" })}
-          />
-        ) : null
-      }
-    >
-      <div className="mt-3 max-w-2xl pb-3.5">
-        <Textarea
-          key={`${mixed}:${custom}`}
-          aria-label="Reply suggestion prompt"
-          rows={12}
-          defaultValue={mixed ? "" : custom || DEFAULT_COMPOSER_REPLY_SUGGESTION_INSTRUCTION}
-          placeholder={
-            mixed ? "Mixed. Enter a prompt to apply to all selected environments." : undefined
-          }
-          onChange={() => {
-            edited.current = true;
-          }}
-          onBlur={(event) => {
-            const value = event.target.value.trim();
-            // The built-in prompt stays unsaved, so it keeps following app updates.
-            const next = value === DEFAULT_COMPOSER_REPLY_SUGGESTION_INSTRUCTION ? "" : value;
-            if (edited.current && (mixed || next !== custom)) {
-              updateSettings({ composerReplySuggestionInstruction: next });
-            }
-            edited.current = false;
-          }}
-        />
-      </div>
-    </SettingsRow>
   );
 }
 

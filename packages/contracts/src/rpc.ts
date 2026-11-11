@@ -4,9 +4,6 @@ import {
   OrchestrationV2SearchThreadResult,
   OrchestrationV2SearchThreadsInput,
   OrchestrationV2SearchThreadsResult,
-  OrchestrationV2SuggestComposerReplyError,
-  OrchestrationV2SuggestComposerReplyInput,
-  OrchestrationV2SuggestComposerReplyResult,
 } from "./orchestrationV2.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
@@ -1799,15 +1796,6 @@ const WsOrchestrationV2GetThreadProjectionRpc = Rpc.make(
   },
 );
 
-const WsOrchestrationV2SuggestComposerReplyRpc = Rpc.make(
-  ORCHESTRATION_V2_WS_METHODS.suggestComposerReply,
-  {
-    payload: OrchestrationV2SuggestComposerReplyInput,
-    success: OrchestrationV2SuggestComposerReplyResult,
-    error: Schema.Union([OrchestrationV2SuggestComposerReplyError, EnvironmentAuthorizationError]),
-  },
-);
-
 const WsOrchestrationV2StopWorkflowRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.stopWorkflow, {
   payload: OrchestrationV2RpcSchemas.stopWorkflow.input,
   success: OrchestrationV2RpcSchemas.stopWorkflow.output,
@@ -2197,7 +2185,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2GetWorktreeThreadIdsRpc,
   WsOrchestrationV2GetOlderSettledThreadsRpc,
   WsOrchestrationV2GetThreadProjectionRpc,
-  WsOrchestrationV2SuggestComposerReplyRpc,
   WsOrchestrationV2LaunchThreadRpc,
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,

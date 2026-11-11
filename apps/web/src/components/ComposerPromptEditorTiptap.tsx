@@ -126,7 +126,6 @@ import { composerCodeBlockHighlight } from "./composerCodeBlockHighlight";
 import { importPastedComposerText } from "./composerInlineTokenPaste";
 import { didComposerSelectionChangeVisibly } from "./composerSelection";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
-import { isReplySuggestionAcceptKey } from "../composerReplySuggestion";
 
 export interface ComposerPromptEditorHandle {
   focus: () => void;
@@ -156,9 +155,6 @@ export interface ComposerPromptEditorProps {
   importContextFragment?:
     | ((fragment: ComposerContextClipboardFragment) => ReadonlyMap<string, string>)
     | undefined;
-  /** Predicted next message, shown in the empty draft's placeholder slot. */
-  replySuggestion?: { readonly text: string; readonly onAccept: () => void } | undefined;
-  onDismissReplySuggestion?: (() => void) | undefined;
   skills: ReadonlyArray<ServerProviderSkill>;
   disabled: boolean;
   placeholder: string;
@@ -953,8 +949,6 @@ function ComposerPromptEditorTiptapInner(
     onChange,
     onVisibleSelectionChange,
     onCommandKeyDown,
-    onDismissReplySuggestion,
-    replySuggestion,
     onPageScrollKeyDown,
     onPageScrollKeyUp,
     onPageScrollRelease,
@@ -981,8 +975,6 @@ function ComposerPromptEditorTiptapInner(
     onChange,
     onVisibleSelectionChange,
     onCommandKeyDown,
-    onDismissReplySuggestion,
-    replySuggestion,
     isPathQueryActive,
     importContextFragment,
   }));
@@ -1122,28 +1114,6 @@ function ComposerPromptEditorTiptapInner(
       editorProps: {
         attributes: editorAttributes,
         handleKeyDown: (view, event) => {
-          const suggestion = readCallbacks().replySuggestion;
-          // A visible suggestion owns plain Tab, Right arrow, and Escape: the draft is empty, so
-          // none of them has native work to do, and Tab would otherwise move focus.
-          if (
-            suggestion !== undefined &&
-            !event.isComposing &&
-            view.state.doc.childCount === 1 &&
-            (view.state.doc.firstChild?.childCount ?? 0) === 0
-          ) {
-            if (isReplySuggestionAcceptKey(event)) {
-              event.preventDefault();
-              event.stopPropagation();
-              suggestion.onAccept();
-              return true;
-            }
-            if (event.key === "Escape") {
-              event.preventDefault();
-              event.stopPropagation();
-              readCallbacks().onDismissReplySuggestion?.();
-              return true;
-            }
-          }
           // In a right-to-left line the start is on the right.
           const backArrow = caretLineDirection(view.state) === "rtl" ? "ArrowRight" : "ArrowLeft";
           const boundary = event.metaKey
@@ -1855,13 +1825,7 @@ function ComposerPromptEditorTiptapInner(
                   placeholderClassName,
                 )}
               >
-                {replySuggestion === undefined ? (
-                  placeholder
-                ) : (
-                  <span className="min-w-0 truncate" data-reply-suggestion>
-                    {replySuggestion.text}
-                  </span>
-                )}
+                {placeholder}
               </div>
             ) : null}
           </div>
