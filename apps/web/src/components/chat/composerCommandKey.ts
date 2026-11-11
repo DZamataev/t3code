@@ -30,7 +30,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 
 /**
  * The composer's key handling inside the editor: send shortcuts, the slash/mention menu,
- * prompt history on ArrowUp/ArrowDown, plan-mode toggle, prompt suggestions on Tab, and list continuation.
+ * prompt history on ArrowUp/ArrowDown, plan-mode toggle, prompt suggestions on Tab or ArrowRight, and list continuation.
  * Returns the editor's key handler; it reads the inputs captured by the render that built it.
  */
 export function composerCommandKeyHandler(input: {
@@ -242,8 +242,9 @@ export function composerCommandKeyHandler(input: {
         return true;
       }
     }
+    // In an empty draft ArrowRight has nowhere to move the caret, so it accepts too.
     if (
-      key === "Tab" &&
+      (key === "Tab" || key === "ArrowRight") &&
       promptSuggestion !== null &&
       promptRef.current.length === 0 &&
       !menuIsActive &&
