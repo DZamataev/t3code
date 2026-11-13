@@ -73,6 +73,7 @@ type CodexRateLimitsProbe =
 const CodexRoutingConfig = Schema.Struct({
   model_provider: Schema.optionalKey(Schema.NullOr(Schema.String)),
   openai_base_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  chatgpt_base_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
   model_providers: Schema.optionalKey(
     Schema.Record(
       Schema.String,
@@ -95,10 +96,13 @@ function routesToNativeOpenai(config: unknown): boolean {
   if (baseUrl == null) return true;
   if (!URL.canParse(baseUrl)) return false;
   const url = new URL(baseUrl);
-  return (
-    url.protocol === "https:" &&
-    (url.hostname === "api.openai.com" || url.hostname === "chatgpt.com")
-  );
+  if (url.protocol !== "https:") return false;
+  if (url.hostname === "api.openai.com" || url.hostname === "chatgpt.com") return true;
+  // A ChatGPT-backend proxy (codex-lb) that also answers the usage reads reports the quota its
+  // traffic spends: Codex reads rate limits from `chatgpt_base_url`, so the same origin on both
+  // means the reported limits belong to the pool this provider bills.
+  const usageUrl = routing.chatgpt_base_url;
+  return usageUrl != null && URL.canParse(usageUrl) && new URL(usageUrl).origin === url.origin;
 }
 
 // A stored login does not mean this provider's traffic spends that login's quota.
