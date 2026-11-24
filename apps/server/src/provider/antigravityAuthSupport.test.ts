@@ -26,6 +26,7 @@ import {
   ANTIGRAVITY_SIGN_IN_REQUIRED_MESSAGE,
   type AntigravityAuthConfig,
   type AntigravityProfile,
+  antigravityCustomEndpoint,
   buildAntigravityAcpSpawnInput,
   isAntigravitySignInRequiredError,
   makeAntigravityStderrHandler,
@@ -221,6 +222,23 @@ describe("Antigravity process environment", () => {
       ).toBeGreaterThanOrEqual(260);
     }).pipe(Effect.provide(Layer.mergeAll(NodeCrypto.layer, NodePath.layerWin32))),
   );
+});
+
+describe("Antigravity custom endpoint", () => {
+  it("reports the origin an API key is sent to", () => {
+    const environment = { GOOGLE_GEMINI_BASE_URL: " https://hub.test:8317/v1/ " };
+    expect(antigravityCustomEndpoint("gemini-api-key", environment)).toBe("https://hub.test:8317");
+  });
+
+  it("reports none for Google sign-ins, a missing URL, or one that does not parse", () => {
+    const environment = { GOOGLE_GEMINI_BASE_URL: "https://hub.test:8317" };
+    expect(antigravityCustomEndpoint("oauth-personal", environment)).toBeUndefined();
+    expect(antigravityCustomEndpoint("agent-platform", environment)).toBeUndefined();
+    expect(antigravityCustomEndpoint("gemini-api-key", {})).toBeUndefined();
+    expect(
+      antigravityCustomEndpoint("gemini-api-key", { GOOGLE_GEMINI_BASE_URL: "hub.test" }),
+    ).toBeUndefined();
+  });
 });
 
 describe("Antigravity authorization URL", () => {

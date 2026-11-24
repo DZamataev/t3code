@@ -42,6 +42,7 @@ import * as AntigravityUsage from "./AntigravityUsage.ts";
 import {
   antigravityAuthConfigIssue,
   antigravityAuthLabel,
+  antigravityCustomEndpoint,
   antigravityAuthUsesBrowser,
   buildAntigravityAcpSpawnInput,
   isAntigravitySignInRequiredError,
@@ -219,9 +220,18 @@ export const AntigravityDriver: ProviderDriver<
       accentColor,
       continuationGroupKey: continuationIdentity.continuationKey,
     });
+    // Limits of a hub the API key is sent to are shown as this instance's.
+    const endpoint = antigravityCustomEndpoint(auth.authMethod, processEnvironment);
     const classifyModels = (draft: ServerProviderDraft) =>
       currentCatalog.pipe(
-        Effect.map((catalog) => stampIdentity(ModelCatalog.applyModelCatalog(draft, catalog))),
+        Effect.map((catalog) =>
+          stampIdentity(
+            ModelCatalog.applyModelCatalog(
+              endpoint ? { ...draft, auth: { ...draft.auth, endpoint } } : draft,
+              catalog,
+            ),
+          ),
+        ),
       );
 
     const prepareSpawn = Effect.fn("AntigravityDriver.prepareSpawn")(function* (

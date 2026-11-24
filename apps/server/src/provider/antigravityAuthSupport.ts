@@ -140,6 +140,20 @@ export function antigravityAuthConfigIssue(auth: AntigravityAuthConfig): string 
 }
 
 /**
+ * Origin of the custom endpoint a Gemini API key is sent to, such as a CLIProxyAPI hub. The hub
+ * spends its own accounts, so its limits are the instance's. Only the API-key method reads
+ * GOOGLE_GEMINI_BASE_URL; Google sign-ins always reach Google.
+ */
+export function antigravityCustomEndpoint(
+  authMethod: AntigravityAuthMethod,
+  environment: NodeJS.ProcessEnv,
+): string | undefined {
+  if (authMethod !== "gemini-api-key") return undefined;
+  const origin = URL.parse(environment.GOOGLE_GEMINI_BASE_URL?.trim() ?? "")?.origin;
+  return origin && origin !== "null" ? origin : undefined;
+}
+
+/**
  * `auth.type` names the selected method so a native logout clears only that method's credentials
  * instead of every stored token. Never holds a credential.
  */

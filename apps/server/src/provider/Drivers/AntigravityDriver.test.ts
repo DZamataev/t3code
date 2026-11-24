@@ -312,6 +312,24 @@ const layerTest = ProviderHostLive.layer.pipe(
 );
 
 it.layer(layerTest)("AntigravityDriver", (it) => {
+  it.effect(
+    "reports the hub a Gemini API key is sent to, so the hub's limits are the instance's",
+    () =>
+      Effect.gen(function* () {
+        const environment = [{ name: "GOOGLE_GEMINI_BASE_URL", value: "https://hub.test:8317/" }];
+        const apiKey = yield* makeHarness({
+          config: { authMethod: "gemini-api-key", apiKey: "test-key" },
+          environment,
+        });
+        expect((yield* apiKey.instance.snapshot.getSnapshot).auth.endpoint).toBe(
+          "https://hub.test:8317",
+        );
+        // A Google sign-in reaches Google whatever the base URL says.
+        const google = yield* makeHarness({ environment });
+        expect((yield* google.instance.snapshot.getSnapshot).auth.endpoint).toBeUndefined();
+      }),
+  );
+
   it.effect.skipIf(windowsHost)(
     "refreshes the selected executable and limits form capabilities to chat",
     () =>
