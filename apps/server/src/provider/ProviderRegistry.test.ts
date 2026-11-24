@@ -2312,6 +2312,27 @@ it.layer(
         );
       });
 
+      it("takes the hub endpoint from the restart check, not from the saved account", () => {
+        const apiKey = {
+          ...signedIn,
+          auth: { status: "authenticated", type: "gemini-api-key", label: "Gemini API key" },
+        } as const satisfies ServerProvider;
+        const probe = {
+          ...restartProbe,
+          auth: { status: "unknown", type: "gemini-api-key", endpoint: "https://hub.test:8317" },
+        } as const satisfies ServerProvider;
+        const merged = ProviderRegistry.mergeProviderSnapshot(apiKey, probe);
+        assert.deepStrictEqual(merged.auth, { ...apiKey.auth, endpoint: "https://hub.test:8317" });
+        // A base URL removed from the instance leaves no endpoint behind.
+        assert.deepStrictEqual(
+          ProviderRegistry.mergeProviderSnapshot(merged, {
+            ...probe,
+            auth: { status: "unknown", type: "gemini-api-key" },
+          }).auth,
+          apiKey.auth,
+        );
+      });
+
       it("does not invent an account after sign-out, disable, uninstall, or for other providers", () => {
         const untouched = [
           { ...restartProbe, auth: { status: "unauthenticated" } },

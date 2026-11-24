@@ -325,7 +325,10 @@ const carrySavedAntigravityAccount = (
   }
   const status =
     nextProvider.installed && nextProvider.status === "warning" ? "ready" : nextProvider.status;
-  return { auth: previousProvider.auth, status };
+  // The endpoint is the instance's configuration, not the account's, so it comes from this check.
+  const { endpoint: _savedEndpoint, ...savedAccount } = previousProvider.auth;
+  const endpoint = nextProvider.auth.endpoint;
+  return { auth: { ...savedAccount, ...(endpoint ? { endpoint } : {}) }, status };
 };
 
 /** One failed check after a ready one is often transient, so its retained catalog stays offered. */
