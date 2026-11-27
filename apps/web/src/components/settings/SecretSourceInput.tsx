@@ -12,7 +12,14 @@ import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { useGT, useMessages } from "gt-react";
-import { AlertTriangleIcon, CheckIcon, KeyRoundIcon, RefreshCwIcon, TypeIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  CheckIcon,
+  KeyRoundIcon,
+  RefreshCwIcon,
+  TypeIcon,
+  VaultIcon,
+} from "lucide-react";
 import { useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
@@ -34,6 +41,8 @@ export interface SecretSource {
 }
 
 const NO_SECRET_SOURCES: ReadonlyArray<SecretSource> = [];
+const sourceIcon = (kind: string | undefined) =>
+  kind === "keepassxc" ? VaultIcon : kind === "one_password" ? OnePasswordIcon : KeyRoundIcon;
 const STORED_VALUE = "__stored__";
 const decodeSecretReference = Schema.decodeUnknownOption(SecretReference);
 
@@ -69,18 +78,19 @@ function SourceLabel(props: {
 /** Picks Value (`null`) or one of `sources`; a `value` no longer among them stays listed. */
 export function SecretSourceSelect(props: {
   readonly value: SecretProviderId | null;
-  readonly sources: ReadonlyArray<Pick<SecretSource, "id" | "label">>;
+  readonly sources: ReadonlyArray<Pick<SecretSource, "id" | "label"> & { readonly kind?: string }>;
   readonly label: string;
   readonly disabled?: boolean;
   readonly onValueChange: (provider: SecretProviderId | null) => void;
 }) {
   const gt = useGT();
   const { value, sources } = props;
-  const known = value === null || sources.some((source) => source.id === value);
+  const selected = sources.find((source) => source.id === value);
+  const known = value === null || selected !== undefined;
   const title =
     value === null
       ? gt("Value", { $context: "secret source: a value typed in directly" })
-      : (sources.find((source) => source.id === value)?.label ?? value);
+      : (selected?.label ?? value);
   return (
     <Select
       value={value ?? STORED_VALUE}
@@ -98,7 +108,7 @@ export function SecretSourceSelect(props: {
         title={title}
       >
         <SelectValue>
-          <SourceIcon icon={value === null ? TypeIcon : known ? OnePasswordIcon : KeyRoundIcon} />
+          <SourceIcon icon={value === null ? TypeIcon : sourceIcon(selected?.kind)} />
         </SelectValue>
       </SelectTrigger>
       <SelectPopup align="start" alignItemWithTrigger={false}>
@@ -110,7 +120,7 @@ export function SecretSourceSelect(props: {
         </SelectItem>
         {sources.map((source) => (
           <SelectItem key={source.id} value={source.id}>
-            <SourceLabel icon={OnePasswordIcon} label={source.label} />
+            <SourceLabel icon={sourceIcon(source.kind)} label={source.label} />
           </SelectItem>
         ))}
         {known ? null : (

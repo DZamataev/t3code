@@ -9954,7 +9954,7 @@
   "f7b9aef971c1ce37": "{label} prüfen",
   "3e3cabe47b0b5c07": "Spracheingabe · {provider}",
   "cd90b098a17bca20": "Keine Geheimnisanbieter konfiguriert.",
-  "1c9374501ee389d3": "Füge ein 1Password-Konto hinzu und wähle es dann als Quelle einer Anbietervariable.",
+  "b56b715c63d9ee33": "Füge ein 1Password-Konto oder eine KeePassXC-Datenbank hinzu und wähle sie dann als Quelle einer Anbietervariable.",
   "382541febe15f472": "Kontosichtbarkeit umschalten",
   "40426afd511710f8": "Nicht unterstützter Anbieter ({kind})",
   "69dc1b9968c66243": [
@@ -12796,5 +12796,26 @@
     ")"
   ],
   "33d18dda74f6d7b3": "Auto-Merge für Stack abbrechen",
-  "012c67c7f1a99e33": "Auto-Merge für Stack"
+  "012c67c7f1a99e33": "Auto-Merge für Stack",
+  "018db73b4b9ccf9b": "Verwende eine KeePassXC-Referenz wie {example}.",
+  "df09f93fb0786858": "Gib einen absoluten Pfad auf dem Server ein.",
+  "8560e6dcc2781adb": "Gib den Pfad zur Datenbank ein.",
+  "1eda4aed5dfdaef3": "Lege eine Schlüsseldatei, eine Passwortdatei oder beides fest.",
+  "68ec4269b3e5c6a0": "KeePassXC-Anbieter hinzufügen",
+  "5dafe013eec85482": "Geheimnisanbieter",
+  "461ad7a14a40160a": [
+    "Anbietervariablen auf ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " können Werte daraus per Name lesen. Die Werte werden beim Start eines Anbieters mit keepassxc-cli auf diesem Server gelesen."
+  ],
+  "c83643431c9f0d3a": "Datenbank",
+  "86944335d5ded30f": "Schlüsseldatei",
+  "0a1fcc7148db5515": "Passwortdatei",
+  "694f9e15573cb37b": "Optional. Eine Datei mit dem Datenbankpasswort in einer Zeile, falls die Datenbank eines hat. Bewahre sie außerhalb des Ordners auf, aus dem die Datenbank synchronisiert wird.",
+  "b6a0e28156dbfb2b": "CLI-Pfad",
+  "5bb47485cbeb5ff0": "Optional. Leer lassen, um keepassxc-cli aus PATH oder dem üblichen Installationsordner zu verwenden."
 }

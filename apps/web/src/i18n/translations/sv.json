@@ -9960,7 +9960,7 @@
   "f7b9aef971c1ce37": "Kontrollera {label}",
   "3e3cabe47b0b5c07": "Röst · {provider}",
   "cd90b098a17bca20": "Inga hemlighetsleverantörer konfigurerade.",
-  "1c9374501ee389d3": "Lägg till ett 1Password-konto och välj det sedan som källa för en leverantörsvariabel.",
+  "b56b715c63d9ee33": "Lägg till ett 1Password-konto eller en KeePassXC-databas och välj det sedan som källa för en leverantörsvariabel.",
   "382541febe15f472": "Växla kontots synlighet",
   "40426afd511710f8": "Leverantör som inte stöds ({kind})",
   "69dc1b9968c66243": [
@@ -12803,5 +12803,26 @@
     ")"
   ],
   "33d18dda74f6d7b3": "Avbryt automatisk merge för stacken",
-  "012c67c7f1a99e33": "Merga stacken automatiskt"
+  "012c67c7f1a99e33": "Merga stacken automatiskt",
+  "018db73b4b9ccf9b": "Använd en KeePassXC-referens som {example}.",
+  "df09f93fb0786858": "Ange en absolut sökväg på servern.",
+  "8560e6dcc2781adb": "Ange sökvägen till databasen.",
+  "1eda4aed5dfdaef3": "Ange en nyckelfil, en lösenordsfil eller båda.",
+  "68ec4269b3e5c6a0": "Lägg till en KeePassXC-leverantör",
+  "5dafe013eec85482": "Hemlighetsleverantör",
+  "461ad7a14a40160a": [
+    "Leverantörsvariabler på ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " kan läsa värden från den via namn. Värden läses med keepassxc-cli på den servern när en leverantör startar."
+  ],
+  "c83643431c9f0d3a": "Databas",
+  "86944335d5ded30f": "Nyckelfil",
+  "0a1fcc7148db5515": "Lösenordsfil",
+  "694f9e15573cb37b": "Valfritt. En fil med databasens lösenord på en rad, om databasen har ett. Förvara den utanför mappen som databasen synkas från.",
+  "b6a0e28156dbfb2b": "CLI-sökväg",
+  "5bb47485cbeb5ff0": "Valfritt. Lämna tomt för att använda keepassxc-cli från PATH eller den vanliga installationsmappen."
 }

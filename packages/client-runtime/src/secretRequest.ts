@@ -4,6 +4,7 @@ import {
   secretRequestPageUrl,
   type OrchestrationV2TurnItem,
   type SecretProviderId,
+  type SecretProviderKind,
   type SecretRequestAnswerInput,
   type ServerConfig,
   type ServerSettings,
@@ -163,6 +164,7 @@ export function secretRequestDisplay(
 /** A configured secret provider a pending card can read its answer from. */
 export interface SecretRequestSource {
   readonly id: SecretProviderId;
+  readonly kind: SecretProviderKind;
   readonly label: string;
   readonly isReference: (reference: string) => boolean;
   readonly referencePlaceholder: string;
@@ -176,6 +178,10 @@ const INVALID_REFERENCE_MESSAGES: ReadonlyMap<string, string> = new Map([
   [
     "Use a 1Password reference like op://vault/item/field.",
     msg("Use a 1Password reference like {example}.", { example: "op://vault/item/field" }),
+  ],
+  [
+    "Use a KeePassXC reference like keepassxc://group/entry.",
+    msg("Use a KeePassXC reference like {example}.", { example: "keepassxc://group/entry" }),
   ],
 ]);
 
@@ -222,6 +228,7 @@ export function configuredSecretSources(
     return [
       {
         id,
+        kind: provider.kind,
         label: provider.label,
         isReference: definition.isReference,
         referencePlaceholder: definition.referencePlaceholder,

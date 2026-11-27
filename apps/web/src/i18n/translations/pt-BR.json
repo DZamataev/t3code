@@ -9952,7 +9952,7 @@
   "f7b9aef971c1ce37": "Verificar {label}",
   "3e3cabe47b0b5c07": "Voz · {provider}",
   "cd90b098a17bca20": "Nenhum provedor de segredos configurado.",
-  "1c9374501ee389d3": "Adicione uma conta do 1Password e escolha-a como origem de uma variável de provedor.",
+  "b56b715c63d9ee33": "Adicione uma conta do 1Password ou um banco de dados do KeePassXC e escolha-o como origem de uma variável de provedor.",
   "382541febe15f472": "Alternar visibilidade da conta",
   "40426afd511710f8": "Provedor sem suporte ({kind})",
   "69dc1b9968c66243": [
@@ -12796,5 +12796,26 @@
     ")"
   ],
   "33d18dda74f6d7b3": "Cancelar merge automático da pilha",
-  "012c67c7f1a99e33": "Merge automático da pilha"
+  "012c67c7f1a99e33": "Merge automático da pilha",
+  "018db73b4b9ccf9b": "Use uma referência do KeePassXC como {example}.",
+  "df09f93fb0786858": "Digite um caminho absoluto no servidor.",
+  "8560e6dcc2781adb": "Digite o caminho do banco de dados.",
+  "1eda4aed5dfdaef3": "Defina um arquivo de chave, um arquivo de senha ou ambos.",
+  "68ec4269b3e5c6a0": "Adicionar um provedor KeePassXC",
+  "5dafe013eec85482": "Provedor de segredos",
+  "461ad7a14a40160a": [
+    "As variáveis de provedor em ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " podem ler valores dele pelo nome. Os valores são lidos com o keepassxc-cli nesse servidor quando um provedor inicia."
+  ],
+  "c83643431c9f0d3a": "Banco de dados",
+  "86944335d5ded30f": "Arquivo de chave",
+  "0a1fcc7148db5515": "Arquivo de senha",
+  "694f9e15573cb37b": "Opcional. Um arquivo com a senha do banco de dados em uma linha, se ele tiver uma. Mantenha-o fora da pasta de onde o banco é sincronizado.",
+  "b6a0e28156dbfb2b": "Caminho da CLI",
+  "5bb47485cbeb5ff0": "Opcional. Deixe vazio para usar o keepassxc-cli do PATH ou da pasta de instalação habitual."
 }

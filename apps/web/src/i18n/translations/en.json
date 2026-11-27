@@ -9962,7 +9962,7 @@
   "f7b9aef971c1ce37": "Check {label}",
   "3e3cabe47b0b5c07": "Voice · {provider}",
   "cd90b098a17bca20": "No secret providers configured.",
-  "1c9374501ee389d3": "Add a 1Password account, then pick it as the source of a provider variable.",
+  "b56b715c63d9ee33": "Add a 1Password account or a KeePassXC database, then pick it as the source of a provider variable.",
   "382541febe15f472": "Toggle account visibility",
   "40426afd511710f8": "Unsupported provider ({kind})",
   "69dc1b9968c66243": [
@@ -12805,5 +12805,26 @@
     ")"
   ],
   "33d18dda74f6d7b3": "Cancel stack auto-merge",
-  "012c67c7f1a99e33": "Auto-merge stack"
+  "012c67c7f1a99e33": "Auto-merge stack",
+  "018db73b4b9ccf9b": "Use a KeePassXC reference like {example}.",
+  "df09f93fb0786858": "Enter an absolute path on the server.",
+  "8560e6dcc2781adb": "Enter the database path.",
+  "1eda4aed5dfdaef3": "Set a key file, a password file, or both.",
+  "68ec4269b3e5c6a0": "Add a KeePassXC provider",
+  "5dafe013eec85482": "Secret provider",
+  "461ad7a14a40160a": [
+    "Provider variables on ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " can read values from it by name. Values are read with keepassxc-cli on that server when a provider starts."
+  ],
+  "c83643431c9f0d3a": "Database",
+  "86944335d5ded30f": "Key file",
+  "0a1fcc7148db5515": "Password file",
+  "694f9e15573cb37b": "Optional. A file holding the database password on one line, for a database that has one. Keep it out of the folder the database syncs from.",
+  "b6a0e28156dbfb2b": "CLI path",
+  "5bb47485cbeb5ff0": "Optional. Leave empty to use keepassxc-cli from PATH or the usual install folder."
 }

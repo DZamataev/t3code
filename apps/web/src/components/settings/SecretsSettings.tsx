@@ -1,5 +1,5 @@
 import type { EnvironmentId, SecretProviderConfig, SecretProviderId } from "@t3tools/contracts";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, VaultIcon } from "lucide-react";
 import { useState } from "react";
 import { T, useGT, useMessages, Var } from "gt-react";
 
@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
+import { MiddleTruncate } from "../ui/middle-truncate";
 import { SecretProviderDialog } from "./SecretProviderDialog";
 import { classifySecretProvider } from "./SecretProviderDialog.logic";
 import { secretProviderUses } from "./SecretsSettings.logic";
@@ -33,6 +34,7 @@ const SECRET_PROVIDER_KINDS: Readonly<
   Record<string, { readonly name: string; readonly icon: Icon }>
 > = {
   one_password: { name: "1Password", icon: OnePasswordIcon },
+  keepassxc: { name: "KeePassXC", icon: VaultIcon },
 };
 
 export function SecretsSettingsPanel() {
@@ -126,7 +128,7 @@ function EnvironmentSecretProviders({
           <SettingsRow
             title={gt("No secret providers configured.")}
             description={gt(
-              "Add a 1Password account, then pick it as the source of a provider variable.",
+              "Add a 1Password account or a KeePassXC database, then pick it as the source of a provider variable.",
             )}
           />
         ) : (
@@ -158,6 +160,11 @@ function EnvironmentSecretProviders({
                         hideTooltip={gt("Click to hide account")}
                         className="max-w-full truncate"
                       />
+                    </span>
+                  ) : classified.kind === "keepassxc" && kind ? (
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className="shrink-0">{kind.name} ·</span>
+                      <MiddleTruncate value={classified.config.database} className="min-w-0" />
                     </span>
                   ) : (
                     gt("Unsupported provider ({kind})", { kind: config.kind })

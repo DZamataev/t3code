@@ -9950,7 +9950,7 @@
   "f7b9aef971c1ce37": "Comprobar {label}",
   "3e3cabe47b0b5c07": "Voz · {provider}",
   "cd90b098a17bca20": "No hay proveedores de secretos configurados.",
-  "1c9374501ee389d3": "Añade una cuenta de 1Password y elígela como origen de una variable de proveedor.",
+  "b56b715c63d9ee33": "Añade una cuenta de 1Password o una base de datos de KeePassXC y elígela como origen de una variable de proveedor.",
   "382541febe15f472": "Alternar visibilidad de la cuenta",
   "40426afd511710f8": "Proveedor no compatible ({kind})",
   "69dc1b9968c66243": [
@@ -12791,5 +12791,26 @@
     ")"
   ],
   "33d18dda74f6d7b3": "Cancelar la fusión automática de la pila",
-  "012c67c7f1a99e33": "Fusión automática de la pila"
+  "012c67c7f1a99e33": "Fusión automática de la pila",
+  "018db73b4b9ccf9b": "Usa una referencia de KeePassXC como {example}.",
+  "df09f93fb0786858": "Introduce una ruta absoluta en el servidor.",
+  "8560e6dcc2781adb": "Introduce la ruta de la base de datos.",
+  "1eda4aed5dfdaef3": "Define un archivo de clave, un archivo de contraseña o ambos.",
+  "68ec4269b3e5c6a0": "Añadir un proveedor de KeePassXC",
+  "5dafe013eec85482": "Proveedor de secretos",
+  "461ad7a14a40160a": [
+    "Las variables de proveedor de ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " pueden leer valores de él por nombre. Los valores se leen con keepassxc-cli en ese servidor cuando se inicia un proveedor."
+  ],
+  "c83643431c9f0d3a": "Base de datos",
+  "86944335d5ded30f": "Archivo de clave",
+  "0a1fcc7148db5515": "Archivo de contraseña",
+  "694f9e15573cb37b": "Opcional. Un archivo con la contraseña de la base de datos en una línea, si la tiene. Guárdalo fuera de la carpeta desde la que se sincroniza la base de datos.",
+  "b6a0e28156dbfb2b": "Ruta de la CLI",
+  "5bb47485cbeb5ff0": "Opcional. Déjalo vacío para usar keepassxc-cli del PATH o de la carpeta de instalación habitual."
 }

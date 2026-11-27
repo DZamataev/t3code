@@ -94,4 +94,39 @@ describe("SecretSourceInput", () => {
       reference: "op://Private/OpenAI/replacement",
     });
   });
+
+  it("reads KeePassXC references with KeePassXC syntax", async () => {
+    const vault = SecretProviderId.make("deck-vault");
+    const onSecretChange = vi.fn();
+    await using screen = await render(
+      <SecretSourceInput
+        aria-label="API key"
+        value=""
+        sources={[
+          ...sources,
+          { id: vault, kind: SecretProviderKind.make("keepassxc"), label: "Deck vault" },
+        ]}
+        onCommit={() => {}}
+        onSecretChange={onSecretChange}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("combobox", { name: "API key source" }));
+    await userEvent.click(screen.getByRole("option", { name: "Deck vault" }));
+    await expect
+      .element(reference(screen))
+      .toHaveAttribute("placeholder", "keepassxc://group/entry");
+
+    await commitReference(screen, "op://Private/OpenAI/credential");
+    await expect
+      .element(screen.getByText("Use a KeePassXC reference like keepassxc://group/entry."))
+      .toBeVisible();
+    expect(onSecretChange).not.toHaveBeenCalled();
+
+    await commitReference(screen, "keepassxc://Codex/codex-lb oneclick");
+    expect(onSecretChange).toHaveBeenCalledExactlyOnceWith({
+      provider: vault,
+      reference: "keepassxc://Codex/codex-lb oneclick",
+    });
+  });
 });
