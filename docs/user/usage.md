@@ -60,7 +60,9 @@ of being averaged with other Codex accounts.
 
 ## Connect a CLIProxyAPI hub
 
-Open **Settings → Providers → Usage providers → Add hub**, choose the environment, and enter the hub URL and management key. Pools Codex, Claude, and Grok accounts under **Usage → Limits** (including Codex **Use reset**). Configure the provider's endpoint to the same URL if you want threads to display that hub's limits.
+Open **Settings → Providers → Usage providers → Add hub**, choose the environment, and enter the hub URL and management key. Pools Codex, Claude, Grok, and Antigravity accounts under **Usage → Limits** (including Codex **Use reset**). Configure the provider's endpoint to the same URL if you want threads to display that hub's limits.
+
+Antigravity quotas come from Google's internal quota API, read by the hub with each account's own credentials. Google has said calls to its internal APIs can get an account flagged; the hub's Antigravity accounts already reach those APIs for every request they serve, and a local Antigravity sign-in is never queried.
 
 ## Connect an HTTP quota source
 

@@ -12,7 +12,7 @@ import {
   type UsageLimitSourceSnapshot,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
-import { hubRoutes } from "@t3tools/shared/usageLimits";
+import { antigravityWindowLimitsModel, hubRoutes } from "@t3tools/shared/usageLimits";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -329,7 +329,10 @@ export function hubPoolResetAt(
     // An unread account may be the one still blocked, so its refill is unknown.
     if (account.usageLimits.unavailable) return null;
     const spent = account.usageLimits.windows.filter(
-      (window) => window.usedPercent >= 100 && windowLimitsModel(window, model),
+      (window) =>
+        window.usedPercent >= 100 &&
+        windowLimitsModel(window, model) &&
+        (account.driver !== "antigravity" || antigravityWindowLimitsModel(window, model)),
     );
     if (spent.length === 0) return null;
     const resets = spent.map((window) => Date.parse(window.resetsAt ?? ""));
