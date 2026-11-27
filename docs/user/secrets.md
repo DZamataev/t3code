@@ -9,8 +9,8 @@ work everywhere.
 
 ## Secret providers
 
-1Password is the supported provider. T3 Code reads secrets with the
-[1Password CLI](https://developer.1password.com/docs/cli/) (`op`), so `op` must be installed and
+T3 Code supports 1Password and [KeePassXC](./secrets-keepassxc.md). It reads 1Password secrets
+with the [1Password CLI](https://developer.1password.com/docs/cli/) (`op`), so `op` must be installed and
 signed in on the machine that runs the T3 Code server. When you use T3 Code on another machine or
 from your phone, that is the remote machine, not the device in front of you.
 
@@ -20,16 +20,17 @@ or headless server, sign `op` in with a [service account](./secrets-1password-se
 
 To add one, open **Settings → Secrets**, select **Add provider**, and enter a name and the
 1Password account: the shorthand, sign-in address (without `https://`), or ID that
-`op account list` shows. Secret providers belong to the environment you are connected to. Each
-environment keeps its own list.
+`op account list` shows. For KeePassXC, select **KeePassXC** and enter the database path and how
+to open it; see [KeePassXC](./secrets-keepassxc.md). Secret providers belong to the environment you
+are connected to. Each environment keeps its own list.
 
 ## Use a secret reference
 
 Credential fields in Settings, such as provider environment variables and credentials, source
 control tokens, usage limit keys, and device host tokens, show a source picker next to the field.
 Pick **Value** to save the credential itself, or pick a secret provider and enter a reference such
-as `op://vault/item/field`. Copy the reference from 1Password with **Copy Secret Reference**.
-Select the check button next to a reference to read it now. If it reads, providers that use it
+as `op://vault/item/field` or `keepassxc://group/entry`. Copy a 1Password reference with **Copy
+Secret Reference**. Select the check button next to a reference to read it now. If it reads, providers that use it
 start using the new value.
 
 T3 Code reads the secret when it needs it, for example when a provider starts. Change the
