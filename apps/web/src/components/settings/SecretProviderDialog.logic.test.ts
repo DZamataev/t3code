@@ -83,14 +83,28 @@ describe("secretProviderFromDraft", () => {
     );
   });
 
-  it("asks for a database, an unlock file, and absolute paths", () => {
+  it("asks for a database, a key file, and absolute paths", () => {
     const blocked = secretProviderFromDraft(keePassXc({ cliPath: "keepassxc-cli" }), new Set(), {
       mode: "add",
     });
     expect(Result.isFailure(blocked) && blocked.failure).toEqual({
       database: "Enter the database path.",
-      keyFile: "Set a key file, a password file, or both.",
+      keyFile: "Enter the key file path.",
       cliPath: "Enter an absolute path on the server.",
+    });
+  });
+
+  it("requires the key file even when a password file is set", () => {
+    const blocked = secretProviderFromDraft(
+      keePassXc({
+        database: "/home/deck/t3.kdbx",
+        passwordFile: "/home/deck/t3.pw",
+      }),
+      new Set(),
+      { mode: "add" },
+    );
+    expect(Result.isFailure(blocked) && blocked.failure).toEqual({
+      keyFile: "Enter the key file path.",
     });
   });
 });

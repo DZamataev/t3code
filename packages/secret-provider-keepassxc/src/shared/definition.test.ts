@@ -44,14 +44,19 @@ describe("KeePassXC definition", () => {
     }
   });
 
-  it("needs absolute paths and a key file or password file", () => {
+  it("needs absolute paths and a key file", () => {
     const isConfig = Schema.is(KeePassXcSecretProviderConfig);
     expect(isConfig({ database: "/home/deck/t3.kdbx", keyFile: "/home/deck/t3.keyx" })).toBe(true);
     expect(
-      isConfig({ database: "C:\\Users\\me\\t3.kdbx", passwordFile: "C:/Users/me/t3.pw" }),
+      isConfig({
+        database: "C:\\Users\\me\\t3.kdbx",
+        keyFile: "C:/Users/me/t3.keyx",
+        passwordFile: "C:/Users/me/t3.pw",
+      }),
     ).toBe(true);
     expect(isConfig({ database: "\\\\nas\\vault\\t3.kdbx", keyFile: "/k" })).toBe(true);
     expect(isConfig({ database: "/home/deck/t3.kdbx" })).toBe(false);
+    expect(isConfig({ database: "/home/deck/t3.kdbx", passwordFile: "/t3.pw" })).toBe(false);
     expect(isConfig({ database: "t3.kdbx", keyFile: "/k" })).toBe(false);
     expect(isConfig({ database: "~/t3.kdbx", keyFile: "/k" })).toBe(false);
     expect(isConfig({ database: "/t3.kdbx", keyFile: "-k" })).toBe(false);

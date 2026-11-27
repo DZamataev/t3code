@@ -152,7 +152,12 @@ describe("KeePassXC driver", () => {
     const cli = fakeCli(() => ({ stdout: "deck-user\n" }), { "/run/t3/kpxc.pw": "hunter2\n" });
     return Effect.gen(function* () {
       const values = yield* driver.read(
-        { database: path("/t3.kdbx"), passwordFile: path("/run/t3/kpxc.pw"), cliPath: path(CLI) },
+        {
+          database: path("/t3.kdbx"),
+          keyFile: path("/home/deck/.config/t3.keyx"),
+          passwordFile: path("/run/t3/kpxc.pw"),
+          cliPath: path(CLI),
+        },
         ["keepassxc://Servers/deck#UserName"],
       );
 
@@ -161,6 +166,7 @@ describe("KeePassXC driver", () => {
         "show",
         "--show-protected",
         "--attributes=UserName",
+        "--key-file=/home/deck/.config/t3.keyx",
         "--",
         "/t3.kdbx",
         "Servers/deck",
@@ -232,7 +238,12 @@ describe("KeePassXC driver", () => {
       for (const passwordFile of ["/missing", "/two-lines"]) {
         assert.deepStrictEqual(
           yield* driver.read(
-            { database: path("/t3.kdbx"), passwordFile: path(passwordFile), cliPath: path(CLI) },
+            {
+              database: path("/t3.kdbx"),
+              keyFile: path("/home/deck/.config/t3.keyx"),
+              passwordFile: path(passwordFile),
+              cliPath: path(CLI),
+            },
             ["keepassxc://A"],
           ),
           [undefined],
@@ -251,7 +262,12 @@ describe("KeePassXC driver", () => {
       for (const passwordFile of ["/run/t3/kpxc.fifo", "/run/t3/kpxc.huge"]) {
         assert.deepStrictEqual(
           yield* driver.read(
-            { database: path("/t3.kdbx"), passwordFile: path(passwordFile), cliPath: path(CLI) },
+            {
+              database: path("/t3.kdbx"),
+              keyFile: path("/home/deck/.config/t3.keyx"),
+              passwordFile: path(passwordFile),
+              cliPath: path(CLI),
+            },
             ["keepassxc://A"],
           ),
           [undefined],

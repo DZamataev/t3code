@@ -9,14 +9,13 @@ For the basics, see [Secrets](./secrets.md).
 ## Before you start
 
 T3 Code runs `keepassxc-cli` on the machine that runs the T3 Code server, often with nobody there to
-type a master password. So it opens the database with a key file, and optionally with a password
-read from a file:
+type a master password. So it needs a key file to open the database, and optionally a password read
+from a file:
 
 | Database is protected by | Set in T3 Code             |
 | ------------------------ | -------------------------- |
 | Key file only            | Key file                   |
 | Password and key file    | Key file and password file |
-| Password only            | Password file              |
 
 Use a separate database that holds only what the server needs, not your personal vault. Every key in
 it can be read by anything that runs as the server's user, agents included.
@@ -37,7 +36,8 @@ Linux and macOS, make them readable only by you (`chmod 600`).
 
 3. Add entries in KeePassXC, or with `keepassxc-cli add`. Put the key in the entry's password.
 4. In **Settings → Secrets**, select **Add provider**, then **KeePassXC**. Enter a name, the
-   database path, and the key file path, the password file path, or both. Paths must be absolute.
+   database path, the key file path and, if the database has a password, the password file path.
+   Paths must be absolute.
 5. Pick the provider as the source of a field and enter a reference to the entry.
 
 T3 Code looks for `keepassxc-cli` on `PATH`, then in the usual install folders:

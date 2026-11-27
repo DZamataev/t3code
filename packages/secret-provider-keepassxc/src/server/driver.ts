@@ -91,7 +91,7 @@ const readOne = Effect.fn("KeePassXcDriver.readOne")(function* (
     "show",
     "--show-protected",
     `--attributes=${target.attribute}`,
-    ...(config.keyFile === undefined ? [] : [`--key-file=${config.keyFile}`]),
+    `--key-file=${config.keyFile}`,
     ...(password === undefined ? ["--no-password"] : []),
     "--",
     config.database,

@@ -86,7 +86,7 @@ export function draftFromSecretProvider(provider: SecretProviderConfig): SecretP
       ...emptySecretProviderDraft("keepassxc"),
       name: provider.label,
       database: config.database,
-      keyFile: config.keyFile ?? "",
+      keyFile: config.keyFile,
       passwordFile: config.passwordFile ?? "",
       cliPath: config.cliPath ?? "",
     };
@@ -200,13 +200,17 @@ function keePassXcConfig(
     else issues[field] = notAbsolute;
   }
   if (paths.database.length === 0) issues.database = resolve(msg("Enter the database path."));
-  if (paths.keyFile.length === 0 && paths.passwordFile.length === 0) {
-    issues.keyFile = resolve(msg("Set a key file, a password file, or both."));
+  if (paths.keyFile.length === 0) issues.keyFile = resolve(msg("Enter the key file path."));
+  if (
+    Object.keys(issues).length > 0 ||
+    decoded.database === undefined ||
+    decoded.keyFile === undefined
+  ) {
+    return Result.fail(issues);
   }
-  if (Object.keys(issues).length > 0 || decoded.database === undefined) return Result.fail(issues);
   return Result.succeed({
     database: decoded.database,
-    ...(decoded.keyFile === undefined ? {} : { keyFile: decoded.keyFile }),
+    keyFile: decoded.keyFile,
     ...(decoded.passwordFile === undefined ? {} : { passwordFile: decoded.passwordFile }),
     ...(decoded.cliPath === undefined ? {} : { cliPath: decoded.cliPath }),
   });

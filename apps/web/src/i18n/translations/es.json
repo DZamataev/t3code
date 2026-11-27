@@ -12795,7 +12795,7 @@
   "018db73b4b9ccf9b": "Usa una referencia de KeePassXC como {example}.",
   "df09f93fb0786858": "Introduce una ruta absoluta en el servidor.",
   "8560e6dcc2781adb": "Introduce la ruta de la base de datos.",
-  "1eda4aed5dfdaef3": "Define un archivo de clave, un archivo de contraseña o ambos.",
+  "93263db49f5eb4aa": "Introduce la ruta del archivo de clave.",
   "68ec4269b3e5c6a0": "Añadir un proveedor de KeePassXC",
   "5dafe013eec85482": "Proveedor de secretos",
   "461ad7a14a40160a": [

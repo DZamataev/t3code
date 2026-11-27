@@ -14,19 +14,13 @@ export const KeePassXcPath = Schema.String.check(
 ).pipe(Schema.brand("KeePassXcPath"));
 export type KeePassXcPath = typeof KeePassXcPath.Type;
 
-/** A server can open the database unattended only with a key file, a password file, or both. */
+/** A server can open the database unattended with a key file and an optional password file. */
 export const KeePassXcSecretProviderConfig = Schema.Struct({
   database: KeePassXcPath,
-  keyFile: Schema.optionalKey(KeePassXcPath),
+  keyFile: KeePassXcPath,
   passwordFile: Schema.optionalKey(KeePassXcPath),
   cliPath: Schema.optionalKey(KeePassXcPath),
-}).check(
-  Schema.makeFilter((config) =>
-    config.keyFile !== undefined || config.passwordFile !== undefined
-      ? true
-      : "Set a key file, a password file, or both.",
-  ),
-);
+});
 export type KeePassXcSecretProviderConfig = typeof KeePassXcSecretProviderConfig.Type;
 
 const REFERENCE_PREFIX = "keepassxc://";

@@ -12809,7 +12809,7 @@
   "018db73b4b9ccf9b": "Use a KeePassXC reference like {example}.",
   "df09f93fb0786858": "Enter an absolute path on the server.",
   "8560e6dcc2781adb": "Enter the database path.",
-  "1eda4aed5dfdaef3": "Set a key file, a password file, or both.",
+  "93263db49f5eb4aa": "Enter the key file path.",
   "68ec4269b3e5c6a0": "Add a KeePassXC provider",
   "5dafe013eec85482": "Secret provider",
   "461ad7a14a40160a": [
