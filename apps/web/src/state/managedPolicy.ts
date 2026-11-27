@@ -1,4 +1,5 @@
 import type { EnvironmentId, ManagedPolicySummary, ProviderDriverKind } from "@t3tools/contracts";
+import { telemetryOnByDefault } from "@t3tools/shared/forkTelemetry";
 import { msg } from "gt-react";
 
 import { m, type MessageResolver } from "../i18n/messages";
@@ -38,13 +39,16 @@ export function managedTelemetryOffMessage(
   policy: ManagedPolicySummary | undefined,
   resolve: MessageResolver = m,
 ): string | undefined {
-  return policy?.limits?.telemetry === false
-    ? resolve(
-        msg("{organization} turned off product usage data.", {
-          organization: policy.organization,
-        }),
-      )
-    : undefined;
+  if (policy?.limits?.telemetry === false) {
+    return resolve(
+      msg("{organization} turned off product usage data.", {
+        organization: policy.organization,
+      }),
+    );
+  }
+  return telemetryOnByDefault
+    ? undefined
+    : resolve(msg("This build of T3 Code doesn't send product usage data by default."));
 }
 
 export interface ManagedInstanceLocks {

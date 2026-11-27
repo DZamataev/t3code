@@ -99,6 +99,10 @@
       "types": "./src/otelEnvironment.ts",
       "import": "./src/otelEnvironment.ts"
     },
+    "./forkTelemetry": {
+      "types": "./src/forkTelemetry.ts",
+      "import": "./src/forkTelemetry.ts"
+    },
     "./httpObservability": {
       "types": "./src/httpObservability.ts",
       "import": "./src/httpObservability.ts"

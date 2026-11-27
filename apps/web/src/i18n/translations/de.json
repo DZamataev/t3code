@@ -3132,6 +3132,7 @@
   "228dcd284ea651b3": "Der WSL-Status konnte nicht geladen werden.",
   "b08d105dd2553f8d": "Das Projekt ist nicht in der Desktop-App erschienen.",
   "bf45d68027d21097": "{organization} hat Produktnutzungsdaten deaktiviert.",
+  "8cdd0655cf43a7b8": "Dieser Build von T3 Code sendet standardmäßig keine Produktnutzungsdaten.",
   "d85822b18e9475df": "Verwaltet von {organization}.",
   "a6dd531d58080010": "Verbinde dich mit diesem Server, um nach Releases zu suchen.",
   "314cdccee9c14774": "Dieser Server unterstützt keine Registry-Abfragen. Aktualisiere ihn, bevor du den Kanal wechselst.",

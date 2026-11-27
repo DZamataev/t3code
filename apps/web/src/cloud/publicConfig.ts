@@ -1,3 +1,4 @@
+import { telemetryOnByDefault } from "@t3tools/shared/forkTelemetry";
 import {
   clerkFrontendApiHostnameFromPublishableKey,
   relayClerkTokenOptions,
@@ -76,7 +77,7 @@ export function relayTelemetryEnabled(): boolean | null {
     desktopRelayTelemetry ??= window.desktopBridge.getRelayTelemetryEnabled();
     return desktopRelayTelemetry;
   }
-  return serverRelayTelemetry ?? (isHostedStaticApp() ? true : null);
+  return serverRelayTelemetry ?? (isHostedStaticApp() && telemetryOnByDefault ? true : null);
 }
 
 export function resolveRelayTracingConfig() {
