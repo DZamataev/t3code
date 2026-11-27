@@ -102,6 +102,7 @@ const makeCodexConfig = (overrides: Partial<CodexSettings>): CodexSettings => ({
   binaryPath: "codex",
   homePath: "",
   shadowHomePath: "",
+  usageLimitsUrl: "",
   launchArgs: "",
   customModels: [],
   ...overrides,

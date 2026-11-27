@@ -48,6 +48,16 @@ instance's `ANTHROPIC_API_KEY`. A model-scoped weekly window is shown only when 
 differs from the shared weekly limit, so plans without a per-model limit show one weekly bar
 instead of the same bar twice.
 
+A Codex instance whose model provider is a [codex-lb](https://github.com/Soju06/codex-lb) balancer
+can show the balancer's limits instead. Set **Usage limits URL** on the instance to the balancer's
+`/v1/usage`, such as `https://balancer.example/v1/usage`. T3 reads it with the API key the model
+provider in `config.toml` names in `env_key`, so that variable must be in the instance's
+**Environment variables**. The instance then shows the balancer's credit windows, any limits of
+the key itself, and how much the pool's accounts have left, instead of the limits of the ChatGPT
+login in its Codex home. Because those limits belong to the balancer, the instance no longer
+counts as that login under **Usage → Limits**, and its windows get cards of their own there instead
+of being averaged with other Codex accounts.
+
 ## Connect a CLIProxyAPI hub
 
 Open **Settings → Providers → Usage providers → Add hub**, choose the environment, and enter the hub URL and management key. Pools Codex, Claude, and Grok accounts under **Usage → Limits** (including Codex **Use reset**). Configure the provider's endpoint to the same URL if you want threads to display that hub's limits.
