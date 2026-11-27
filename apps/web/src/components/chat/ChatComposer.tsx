@@ -214,6 +214,7 @@ import type {
   OrchestrationV2Run,
   ThreadPullRequestLink,
 } from "@t3tools/contracts";
+import { takeSelectionInsertion } from "~/lib/takeSelection";
 import { threadContextAttachment } from "~/lib/threadContextAttachment";
 import {
   type ComposerCommandItem,
@@ -342,6 +343,7 @@ export interface ChatComposerHandle {
     citation: AssistantCitation,
     sourceAnchor: AssistantCitationSourceAnchor,
   ) => boolean;
+  takeAssistantText: (text: string) => boolean;
   replyToResponse: (response: ResponseContextRecord) => boolean;
   openModelPicker: () => void;
   stepReasoningEffort: (direction: 1 | -1) => void;
@@ -2969,6 +2971,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const insertComposerTextAtEndStable = useStableCallback(insertComposerTextAtEnd);
 
+  const takeComposerText = (text: string): boolean => {
+    if (!canInsertComposerText) return false;
+    const cursor = readComposerSnapshot().expandedCursor;
+    const insertion = takeSelectionInsertion(promptRef.current, cursor, text);
+    if (
+      !insertion ||
+      !applyPromptReplacement(cursor, cursor, insertion.text, {
+        expandedCursorAfterReplace: insertion.cursorAfter,
+      })
+    ) {
+      return false;
+    }
+    if (isComposerCollapsedMobile) expandMobileComposer();
+    return true;
+  };
+  const takeComposerTextStable = useStableCallback(takeComposerText);
+
   const insertComposerFolders = async (
     folders: File[],
     target: FolderDropTarget,
@@ -3377,6 +3396,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           "cursor",
           { ensureLeadingBoundary: true, citationCommentAnchor: sourceAnchor },
         ),
+      takeAssistantText: takeComposerTextStable,
       replyToResponse: (response) => {
         // An open question owns the composer, and its answer would not carry the reply.
         if (pendingUserInputs.length > 0 || projectSelectionRequired) return false;
@@ -3579,6 +3599,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       setComposerDraftReplyTo,
       insertComposerTextStable,
       insertComposerTextAtEndStable,
+      takeComposerTextStable,
       promptRef,
       composerImagesRef,
       composerFilesRef,

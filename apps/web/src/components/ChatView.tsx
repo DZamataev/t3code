@@ -704,6 +704,19 @@ export default function ChatView(props: ChatViewProps) {
     return inserted;
   };
   const citeAssistantTextStable = useStableCallback(citeAssistantText);
+  const takeAssistantTextStable = useStableCallback((text: string) => {
+    const inserted = composerRef.current?.takeAssistantText(text) ?? false;
+    if (!inserted) {
+      toastManager.add({
+        type: "warning",
+        title: gt("The composer is not ready"),
+        description: gt(
+          "Try taking the selection after the connection or pending input is resolved.",
+        ),
+      });
+    }
+    return inserted;
+  });
   const replyToResponseStable = useStableCallback((response: ResponseContextRecord) => {
     const accepted = composerRef.current?.replyToResponse(response) ?? false;
     if (!accepted) {
@@ -3680,6 +3693,7 @@ export default function ChatView(props: ChatViewProps) {
                   citationRequest={citationRequest}
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}
+                  onTakeAssistantText={takeAssistantTextStable}
                   onReplyToResponse={replyToResponseStable}
                   {...(activeProject && !runsOutsideHostCheckout
                     ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }

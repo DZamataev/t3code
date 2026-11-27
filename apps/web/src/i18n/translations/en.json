@@ -13056,5 +13056,8 @@
   "5807c08e225c6b3d": "Download",
   "0d50b5bfe7151ece": "Could not download file",
   "eb1fd384ad5919dd": "Internal note",
-  "b45f0b467e9406d0": "Reply to customer"
+  "b45f0b467e9406d0": "Reply to customer",
+  "b482d17019d44b65": "Take",
+  "8f98cf6ba1c9286f": "Take selection into composer as plain text",
+  "3ef8a532f96e73d4": "Try taking the selection after the connection or pending input is resolved."
 }

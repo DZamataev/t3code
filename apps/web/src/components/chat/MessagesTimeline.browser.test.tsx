@@ -1521,6 +1521,26 @@ describe("MessagesTimeline citations", () => {
       .toBeVisible();
   });
 
+  it("takes the selected text for the composer and dismisses the actions", async () => {
+    const text = "Option two keeps the cache";
+    const taken: string[] = [];
+    await using screen = await renderTimeline([message(text, { role: "assistant" }, "answer")], {
+      onCiteAssistantText: () => true,
+      onTakeAssistantText: (selected) => {
+        taken.push(selected);
+        return true;
+      },
+    });
+    await userEvent.tripleClick(screen.getByText(text));
+    const takeButton = page.getByRole("button", {
+      name: "Take selection into composer as plain text",
+    });
+    await takeButton.click();
+    expect(taken).toHaveLength(1);
+    expect(taken[0]?.trim()).toBe(text);
+    await expect.element(takeButton).not.toBeInTheDocument();
+  });
+
   it("lands a citation present at mount under StrictMode", async () => {
     await using _screen = await renderElement(
       <StrictMode>
