@@ -2,6 +2,7 @@ import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
 import { defineSecretProviderDriver } from "@t3tools/secret-provider-core/server/driver";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveCommandPath, resolveSpawnCommand } from "@t3tools/shared/shell";
+import * as ByteSize from "effect/ByteSize";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -21,6 +22,8 @@ const KEEPASSXC_CLI = "keepassxc-cli";
 const READ_TIMEOUT = Duration.seconds(30);
 // Each read derives the database key again, which can take a second and tens of MB.
 const READ_CONCURRENCY = 4;
+// A password file holds one short line; a bigger one, or one that is not a regular file, could never be.
+const MAX_PASSWORD_FILE_BYTES = 4096;
 
 const encoder = new TextEncoder();
 
@@ -57,6 +60,9 @@ const findCli = Effect.fn("KeePassXcDriver.findCli")(function* (cliPath: string 
 // The CLI reads one line from stdin, so a password file may end in a newline but hold no other.
 const readPassword = Effect.fn("KeePassXcDriver.readPassword")(function* (passwordFile: string) {
   const fileSystem = yield* FileSystem.FileSystem;
+  // A FIFO would never finish the read and a device such as /dev/zero never ends it.
+  const info = yield* fileSystem.stat(passwordFile);
+  if (info.type !== "File" || info.size > ByteSize.bytes(MAX_PASSWORD_FILE_BYTES)) return undefined;
   const contents = yield* fileSystem.readFileString(passwordFile);
   const password = contents.replace(/\r?\n$/, "");
   return password.length === 0 || /[\r\n]/.test(password) ? undefined : password;
@@ -133,26 +139,31 @@ export const driver = defineSecretProviderDriver({
       yield* Effect.logWarning("Could not find keepassxc-cli", { stage: "find-cli" });
       return values;
     }
-    let password: string | undefined;
-    if (config.passwordFile !== undefined) {
-      password = yield* recover("password-file", readPassword(config.passwordFile));
-      if (password === undefined) {
-        yield* Effect.logWarning("Could not read the KeePassXC password file", {
-          stage: "password-file",
-        });
-        return values;
+    // One deadline covers the password file and the reads, so a blocking file cannot wedge this.
+    const outcome = yield* Effect.gen(function* () {
+      let password: string | undefined;
+      if (config.passwordFile !== undefined) {
+        password = yield* recover("password-file", readPassword(config.passwordFile));
+        if (password === undefined) return false;
       }
+      yield* Effect.forEach(
+        references,
+        (reference, index) =>
+          recover("show", readOne(cli, config, password, reference)).pipe(
+            Effect.map((value) => {
+              values[index] = value;
+            }),
+          ),
+        { concurrency: READ_CONCURRENCY, discard: true },
+      );
+      return true;
+    }).pipe(Effect.timeoutOption(READ_TIMEOUT));
+    if (Option.isSome(outcome) && !outcome.value) {
+      yield* Effect.logWarning("Could not read the KeePassXC password file", {
+        stage: "password-file",
+      });
+      return values;
     }
-    const outcome = yield* Effect.forEach(
-      references,
-      (reference, index) =>
-        recover("show", readOne(cli, config, password, reference)).pipe(
-          Effect.map((value) => {
-            values[index] = value;
-          }),
-        ),
-      { concurrency: READ_CONCURRENCY, discard: true },
-    ).pipe(Effect.timeoutOption(READ_TIMEOUT));
     if (Option.isNone(outcome)) {
       yield* Effect.logWarning("KeePassXC did not answer in time", {
         references: references.length,

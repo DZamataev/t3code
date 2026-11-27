@@ -1,6 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, describe, it } from "@effect/vitest";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as ByteSize from "effect/ByteSize";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -40,12 +41,29 @@ interface Invocation {
   readonly stdin: string | "ignore";
 }
 
+interface FakeFile {
+  readonly contents: string;
+  readonly type?: FileSystem.File.Type;
+  readonly size?: number;
+}
+
 function fakeCli(
   answer: (args: ReadonlyArray<string>) => CliResult,
-  files: Readonly<Record<string, string>> = {},
+  files: Readonly<Record<string, string | FakeFile>> = {},
 ) {
   const invocations: Array<Invocation> = [];
   const spawned = Deferred.makeUnsafe<void>();
+  const fileOf = (file: string): FakeFile | undefined => {
+    const entry = files[file];
+    return typeof entry === "string" ? { contents: entry } : entry;
+  };
+  const notFound = (method: string, file: string) =>
+    PlatformError.systemError({
+      _tag: "NotFound",
+      module: "FileSystem",
+      method,
+      pathOrDescriptor: file,
+    });
   const layer = Layer.mergeAll(
     Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
@@ -82,18 +100,21 @@ function fakeCli(
     ),
     NodeCrypto.layer,
     FileSystem.layerNoop({
-      exists: (file) => Effect.succeed(Object.hasOwn(files, file)),
-      readFileString: (file) =>
-        Object.hasOwn(files, file)
-          ? Effect.succeed(files[file]!)
-          : Effect.fail(
-              PlatformError.systemError({
-                _tag: "NotFound",
-                module: "FileSystem",
-                method: "readFileString",
-                pathOrDescriptor: file,
-              }),
-            ),
+      exists: (file) => Effect.succeed(fileOf(file) !== undefined),
+      stat: (file) => {
+        const entry = fileOf(file);
+        if (entry === undefined) return Effect.fail(notFound("stat", file));
+        return Effect.succeed({
+          type: entry.type ?? "File",
+          size: ByteSize.bytes(entry.size ?? encoder.encode(entry.contents).byteLength),
+        } as FileSystem.File.Info);
+      },
+      readFileString: (file) => {
+        const entry = fileOf(file);
+        return entry === undefined
+          ? Effect.fail(notFound("readFileString", file))
+          : Effect.succeed(entry.contents);
+      },
     }),
   );
   return { layer, invocations, spawned };
@@ -148,6 +169,33 @@ describe("KeePassXC driver", () => {
     }).pipe(Effect.provide(cli.layer));
   });
 
+  it.effect("uses the key file and the password file together", () => {
+    const cli = fakeCli(() => ({ stdout: "sk-live\n" }), { "/run/t3/kpxc.pw": "hunter2\n" });
+    return Effect.gen(function* () {
+      const values = yield* driver.read(
+        {
+          database: path("/t3.kdbx"),
+          keyFile: path("/home/deck/.config/t3.keyx"),
+          passwordFile: path("/run/t3/kpxc.pw"),
+          cliPath: path(CLI),
+        },
+        ["keepassxc://Servers/deck"],
+      );
+
+      assert.deepStrictEqual(values, ["sk-live"]);
+      assert.deepStrictEqual(cli.invocations[0]?.args, [
+        "show",
+        "--show-protected",
+        "--attributes=password",
+        "--key-file=/home/deck/.config/t3.keyx",
+        "--",
+        "/t3.kdbx",
+        "Servers/deck",
+      ]);
+      assert.strictEqual(cli.invocations[0]?.stdin, "hunter2\n");
+    }).pipe(Effect.provide(cli.layer));
+  });
+
   it.effect("keeps everything but the newline the CLI adds", () => {
     const cli = fakeCli(() => ({ stdout: " line one\nline two \r\n" }));
     return Effect.gen(function* () {
@@ -182,6 +230,25 @@ describe("KeePassXC driver", () => {
     const cli = fakeCli(() => ({ stdout: "sk-live\n" }), { "/two-lines": "a\nb\n" });
     return Effect.gen(function* () {
       for (const passwordFile of ["/missing", "/two-lines"]) {
+        assert.deepStrictEqual(
+          yield* driver.read(
+            { database: path("/t3.kdbx"), passwordFile: path(passwordFile), cliPath: path(CLI) },
+            ["keepassxc://A"],
+          ),
+          [undefined],
+        );
+      }
+      assert.strictEqual(cli.invocations.length, 0);
+    }).pipe(Effect.provide(cli.layer));
+  });
+
+  it.effect("reads nothing when the password file is not a small regular file", () => {
+    const cli = fakeCli(() => ({ stdout: "sk-live\n" }), {
+      "/run/t3/kpxc.fifo": { contents: "hunter2\n", type: "FIFO" },
+      "/run/t3/kpxc.huge": { contents: "hunter2\n", size: 4097 },
+    });
+    return Effect.gen(function* () {
+      for (const passwordFile of ["/run/t3/kpxc.fifo", "/run/t3/kpxc.huge"]) {
         assert.deepStrictEqual(
           yield* driver.read(
             { database: path("/t3.kdbx"), passwordFile: path(passwordFile), cliPath: path(CLI) },
