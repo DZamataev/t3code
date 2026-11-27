@@ -13049,5 +13049,8 @@
   "5807c08e225c6b3d": "Télécharger",
   "0d50b5bfe7151ece": "Impossible de télécharger le fichier",
   "eb1fd384ad5919dd": "Note interne",
-  "b45f0b467e9406d0": "Répondre au client"
+  "b45f0b467e9406d0": "Répondre au client",
+  "b482d17019d44b65": "Prendre",
+  "8f98cf6ba1c9286f": "Reprendre la sélection dans la zone de saisie en texte brut",
+  "3ef8a532f96e73d4": "Réessayez de reprendre la sélection une fois la connexion ou la saisie en attente résolue."
 }

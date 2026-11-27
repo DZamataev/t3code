@@ -13049,5 +13049,8 @@
   "5807c08e225c6b3d": "Herunterladen",
   "0d50b5bfe7151ece": "Datei konnte nicht heruntergeladen werden",
   "eb1fd384ad5919dd": "Interne Notiz",
-  "b45f0b467e9406d0": "Dem Kunden antworten"
+  "b45f0b467e9406d0": "Dem Kunden antworten",
+  "b482d17019d44b65": "Übernehmen",
+  "8f98cf6ba1c9286f": "Auswahl als reinen Text ins Eingabefeld übernehmen",
+  "3ef8a532f96e73d4": "Versuche, die Auswahl zu übernehmen, sobald die Verbindung oder ausstehende Eingabe geklärt ist."
 }
