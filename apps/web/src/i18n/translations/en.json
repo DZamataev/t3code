@@ -3131,6 +3131,7 @@
   "228dcd284ea651b3": "Failed to load WSL state.",
   "b08d105dd2553f8d": "The project did not appear in the desktop app.",
   "bf45d68027d21097": "{organization} turned off product usage data.",
+  "8cdd0655cf43a7b8": "This build of T3 Code doesn't send product usage data by default.",
   "d85822b18e9475df": "Managed by {organization}.",
   "a6dd531d58080010": "Connect to this server to check releases.",
   "314cdccee9c14774": "This server does not support registry lookups. Update it before switching tracks.",

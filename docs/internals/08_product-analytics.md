@@ -42,8 +42,9 @@ count as product use.
 - Delivery ([`AnalyticsService.ts`](../../apps/server/src/telemetry/AnalyticsService.ts)) attaches a
   UUID per event, backs off on failure, and drops batches after bounded retries so a stuck batch
   cannot loop forever.
-- Dev-runner servers and servers on CI runners disable telemetry (and relay tracing) by default so
-  they do not inflate install counts. CI detection is `isCiEnvironment` in
-  [`otelEnvironment.ts`](../../packages/shared/src/otelEnvironment.ts). An explicit
-  `T3CODE_TELEMETRY_ENABLED=true` overrides both defaults; a managed policy that denies telemetry
-  overrides everything.
+- This fork turns telemetry (and relay tracing) off by default on every server through
+  [`forkTelemetry.ts`](../../packages/shared/src/forkTelemetry.ts); mobile builds send none, and the
+  hosted web app traces only once a server it connects to allows it. An explicit `T3CODE_TELEMETRY_ENABLED=true` opts a server in;
+  `DO_NOT_TRACK=1` and a managed policy that denies telemetry override it. Upstream's own default
+  is on except for dev-runner servers and CI runners (`isCiEnvironment` in
+  [`otelEnvironment.ts`](../../packages/shared/src/otelEnvironment.ts)).

@@ -3131,6 +3131,7 @@
   "228dcd284ea651b3": "Falha ao carregar o estado do WSL.",
   "b08d105dd2553f8d": "O projeto não apareceu no app para desktop.",
   "bf45d68027d21097": "{organization} desativou os dados de uso do produto.",
+  "8cdd0655cf43a7b8": "Esta build do T3 Code não envia dados de uso do produto por padrão.",
   "d85822b18e9475df": "Gerenciado por {organization}.",
   "a6dd531d58080010": "Conecte-se a este servidor para verificar as versões.",
   "314cdccee9c14774": "Este servidor não permite consultas ao registro. Atualize-o antes de trocar de canal.",

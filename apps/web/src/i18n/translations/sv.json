@@ -3131,6 +3131,7 @@
   "228dcd284ea651b3": "Det gick inte att läsa in WSL-statusen.",
   "b08d105dd2553f8d": "Projektet visades inte i skrivbordsappen.",
   "bf45d68027d21097": "{organization} har stängt av produktanvändningsdata.",
+  "8cdd0655cf43a7b8": "Den här versionen av T3 Code skickar inte produktanvändningsdata som standard.",
   "d85822b18e9475df": "Hanteras av {organization}.",
   "a6dd531d58080010": "Anslut till den här servern för att söka efter versioner.",
   "314cdccee9c14774": "Den här servern stöder inte registeruppslag. Uppdatera den innan du byter spår.",

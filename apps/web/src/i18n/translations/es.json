@@ -3131,6 +3131,7 @@
   "228dcd284ea651b3": "No se pudo cargar el estado de WSL.",
   "b08d105dd2553f8d": "El proyecto no apareció en la app de escritorio.",
   "bf45d68027d21097": "{organization} desactivó los datos de uso del producto.",
+  "8cdd0655cf43a7b8": "Esta compilación de T3 Code no envía datos de uso del producto de forma predeterminada.",
   "d85822b18e9475df": "Gestionado por {organization}.",
   "a6dd531d58080010": "Conéctate a este servidor para comprobar las versiones.",
   "314cdccee9c14774": "Este servidor no permite consultas al registro. Actualízalo antes de cambiar de canal.",

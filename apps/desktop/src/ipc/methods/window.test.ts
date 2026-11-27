@@ -306,6 +306,9 @@ describe("installRelayTelemetryEnabled", () => {
       return { beforeDiscovery, afterDiscovery: ask() };
     }).pipe(Effect.scoped);
 
+  // This fork sends no relay traces unless the environment opts in.
+  const optedIn = (): NodeJS.ProcessEnv => ({ T3CODE_TELEMETRY_ENABLED: "true" });
+
   it.effect("reads the desktop host opt-out before returning the renderer policy", () =>
     Effect.gen(function* () {
       assert.deepEqual(yield* relayTelemetryEnabled({ T3CODE_TELEMETRY_ENABLED: "false" }), {
@@ -313,12 +316,12 @@ describe("installRelayTelemetryEnabled", () => {
         afterDiscovery: false,
       });
       // Undecided until the login shell is read, so the renderer asks again instead of opting out.
-      assert.deepEqual(yield* relayTelemetryEnabled({}), {
+      assert.deepEqual(yield* relayTelemetryEnabled(optedIn()), {
         beforeDiscovery: null,
         afterDiscovery: true,
       });
       assert.deepEqual(
-        yield* relayTelemetryEnabled({}, undefined, { T3CODE_TELEMETRY_ENABLED: "false" }),
+        yield* relayTelemetryEnabled(optedIn(), undefined, { T3CODE_TELEMETRY_ENABLED: "false" }),
         { beforeDiscovery: null, afterDiscovery: false },
       );
     }),
@@ -334,11 +337,11 @@ describe("installRelayTelemetryEnabled", () => {
       const after = function* (...args: Parameters<typeof relayTelemetryEnabled>) {
         return (yield* relayTelemetryEnabled(...args)).afterDiscovery;
       };
-      assert.isFalse(yield* after({}, policy({ telemetry: false })));
-      assert.isTrue(yield* after({}, policy({ webhookTasks: false })));
+      assert.isFalse(yield* after(optedIn(), policy({ telemetry: false })));
+      assert.isTrue(yield* after(optedIn(), policy({ webhookTasks: false })));
       // A policy that cannot be read fails closed.
       assert.isFalse(
-        yield* after({}, new ManagedPolicyFileError({ path: "/test", reason: "bad JSON" })),
+        yield* after(optedIn(), new ManagedPolicyFileError({ path: "/test", reason: "bad JSON" })),
       );
     }),
   );
