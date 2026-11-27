@@ -64,7 +64,7 @@ const LIMIT_TYPE_LABELS: Readonly<Record<string, string>> = {
   cost_usd: "spend",
 };
 
-function limitWindow(limit: CodexLbLimit): ServerProviderUsageWindow | undefined {
+function limitWindow(limit: CodexLbLimit, balancer: string): ServerProviderUsageWindow | undefined {
   if (!Number.isFinite(limit.max_value) || limit.max_value <= 0) return undefined;
   // The pool's own windows are what every key spends; a key's limits apply on top of them.
   const scope = limit.source === "aggregate" ? "credits" : `key-${limit.limit_type}`;
@@ -80,7 +80,7 @@ function limitWindow(limit: CodexLbLimit): ServerProviderUsageWindow | undefined
       : `Key ${shape.label.toLowerCase()} ${typeLabel}`;
   const resetsAt = DateTime.make(limit.reset_at ?? "");
   return {
-    id: `${scope}-${limit.limit_window}${model ? `-${model}` : ""}`,
+    id: `${balancer}:${scope}-${limit.limit_window}${model ? `-${model}` : ""}`,
     ...shape,
     label: model ? `${label} · ${model}` : label,
     ...(model ? { modelIds: [model] } : {}),
@@ -91,10 +91,12 @@ function limitWindow(limit: CodexLbLimit): ServerProviderUsageWindow | undefined
 
 /**
  * Windows of a codex-lb `/v1/usage` answer; undefined when the body is not one. `limits` repeats
- * the pool's windows when the key has none of its own, so equal entries are read once.
+ * the pool's windows when the key has none of its own, so equal entries are read once. `balancer`
+ * scopes the ids so two balancers never pool their windows together.
  */
 export function codexLbUsageToWindows(
   body: unknown,
+  balancer: string,
 ): ReadonlyArray<ServerProviderUsageWindow> | undefined {
   const usage = Option.getOrUndefined(decodeCodexLbUsage(body));
   if (
@@ -106,7 +108,7 @@ export function codexLbUsageToWindows(
   const windows = new Map<string, ServerProviderUsageWindow>();
   for (const entry of [...(usage.upstream_limits ?? []), ...(usage.limits ?? [])]) {
     const limit = Option.getOrUndefined(decodeCodexLbLimit(entry));
-    const window = limit && limitWindow(limit);
+    const window = limit && limitWindow(limit, balancer);
     if (window && !windows.has(window.id)) windows.set(window.id, window);
   }
   // codex-lb reports how much the pool's accounts have left; null means it has no reading.
@@ -116,8 +118,8 @@ export function codexLbUsageToWindows(
     ["weekly", pool?.secondary, WINDOW_SHAPES["7d"]!],
   ] as const) {
     if (typeof remaining !== "number" || !Number.isFinite(remaining)) continue;
-    windows.set(`pool-accounts-${slot}`, {
-      id: `pool-accounts-${slot}`,
+    windows.set(`${balancer}:pool-accounts-${slot}`, {
+      id: `${balancer}:pool-accounts-${slot}`,
       ...shape,
       label: `${shape.label} · pool accounts`,
       usedPercent: clampPercent(100 - remaining),
@@ -154,9 +156,13 @@ export const readCodexLbUsageLimits = Effect.fn("readCodexLbUsageLimits")(functi
   if (!apiKey) {
     return unavailable(`Codex usage limits need ${input.apiKeyEnv} on this instance.`);
   }
-  if (!URL.canParse(input.url) || !/^https?:$/.test(new URL(input.url).protocol)) {
+  const url = URL.canParse(input.url) ? new URL(input.url) : null;
+  if (!url || !/^https?:$/.test(url.protocol)) {
     return unavailable("The usage limits URL is not valid.");
   }
+  // Protocol is not part of it, so http and https on one host name the same balancer.
+  const path = url.pathname.replace(/\/v1\/usage\/?$/, "").replace(/\/$/, "");
+  const balancer = `${url.host}${path}`;
   const client = yield* HttpClient.HttpClient;
   const body = yield* client
     .execute(
@@ -176,7 +182,7 @@ export const readCodexLbUsageLimits = Effect.fn("readCodexLbUsageLimits")(functi
       Effect.result,
     );
   if (Result.isFailure(body)) return unavailable(describeFailure(body.failure));
-  const windows = codexLbUsageToWindows(body.success);
+  const windows = codexLbUsageToWindows(body.success, balancer);
   if (windows === undefined) {
     return unavailable("The usage limits URL did not answer with codex-lb usage JSON.");
   }

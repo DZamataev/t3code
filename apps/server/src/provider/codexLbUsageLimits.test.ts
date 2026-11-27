@@ -13,6 +13,7 @@ import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from ".
 import { codexLbUsageToWindows, readCodexLbUsageLimits } from "./codexLbUsageLimits.ts";
 
 const URL_V1_USAGE = "https://clb.test/v1/usage";
+const HOST = "clb.test";
 const API_KEY = "sk-clb-secret";
 const checkedAt = "2026-11-26T12:00:00.000Z";
 
@@ -69,9 +70,9 @@ const read = (environment: NodeJS.ProcessEnv, apiKeyEnv: string | undefined) =>
 
 describe("codexLbUsageToWindows", () => {
   it("reads the pool's credit window once and the accounts' remaining share as used", () => {
-    expect(codexLbUsageToWindows(POOL_ONLY)).toEqual([
+    expect(codexLbUsageToWindows(POOL_ONLY, HOST)).toEqual([
       {
-        id: "credits-7d",
+        id: "clb.test:credits-7d",
         kind: "weekly",
         label: "Weekly credits",
         windowDurationMins: 10080,
@@ -79,7 +80,7 @@ describe("codexLbUsageToWindows", () => {
         resetsAt: "2026-11-27T23:22:45.000Z",
       },
       {
-        id: "pool-accounts-weekly",
+        id: "clb.test:pool-accounts-weekly",
         kind: "weekly",
         label: "Weekly · pool accounts",
         windowDurationMins: 10080,
@@ -89,35 +90,38 @@ describe("codexLbUsageToWindows", () => {
   });
 
   it("keeps a key's own limits apart from the pool's and scopes a model filter", () => {
-    const windows = codexLbUsageToWindows({
-      limits: [
-        {
-          limit_type: "total_tokens",
-          limit_window: "daily",
-          max_value: 1000,
-          current_value: 1000,
-          model_filter: "gpt-5.5",
-          reset_at: "2026-11-27T00:00:00Z",
-          source: "api_key_limit",
-        },
-        { limit_type: "credits", limit_window: "7d", max_value: 0, current_value: 0 },
-        { limit_type: "credits", limit_window: "5h" },
-      ],
-      upstream_limits: [
-        {
-          limit_type: "credits",
-          limit_window: "5h",
-          max_value: 200,
-          current_value: 50,
-          reset_at: "2026-11-26T15:00:00Z",
-          source: "aggregate",
-        },
-      ],
-      account_pool_usage: { primary: 0, secondary: null },
-    });
+    const windows = codexLbUsageToWindows(
+      {
+        limits: [
+          {
+            limit_type: "total_tokens",
+            limit_window: "daily",
+            max_value: 1000,
+            current_value: 1000,
+            model_filter: "gpt-5.5",
+            reset_at: "2026-11-27T00:00:00Z",
+            source: "api_key_limit",
+          },
+          { limit_type: "credits", limit_window: "7d", max_value: 0, current_value: 0 },
+          { limit_type: "credits", limit_window: "5h" },
+        ],
+        upstream_limits: [
+          {
+            limit_type: "credits",
+            limit_window: "5h",
+            max_value: 200,
+            current_value: 50,
+            reset_at: "2026-11-26T15:00:00Z",
+            source: "aggregate",
+          },
+        ],
+        account_pool_usage: { primary: 0, secondary: null },
+      },
+      HOST,
+    );
     expect(windows).toEqual([
       {
-        id: "credits-5h",
+        id: "clb.test:credits-5h",
         kind: "session",
         label: "Session credits",
         windowDurationMins: 300,
@@ -125,7 +129,7 @@ describe("codexLbUsageToWindows", () => {
         resetsAt: "2026-11-26T15:00:00.000Z",
       },
       {
-        id: "key-total_tokens-daily-gpt-5.5",
+        id: "clb.test:key-total_tokens-daily-gpt-5.5",
         kind: "other",
         label: "Key daily tokens · gpt-5.5",
         windowDurationMins: 1440,
@@ -134,7 +138,7 @@ describe("codexLbUsageToWindows", () => {
         resetsAt: "2026-11-27T00:00:00.000Z",
       },
       {
-        id: "pool-accounts-session",
+        id: "clb.test:pool-accounts-session",
         kind: "session",
         label: "Session · pool accounts",
         windowDurationMins: 300,
@@ -145,10 +149,10 @@ describe("codexLbUsageToWindows", () => {
 
   it("tells an empty codex-lb answer from a body that is not one", () => {
     expect(
-      codexLbUsageToWindows({ limits: [], upstream_limits: [], account_pool_usage: null }),
+      codexLbUsageToWindows({ limits: [], upstream_limits: [], account_pool_usage: null }, HOST),
     ).toEqual([]);
-    expect(codexLbUsageToWindows({ error: "nope" })).toBeUndefined();
-    expect(codexLbUsageToWindows("<html>")).toBeUndefined();
+    expect(codexLbUsageToWindows({ error: "nope" }, HOST)).toBeUndefined();
+    expect(codexLbUsageToWindows("<html>", HOST)).toBeUndefined();
   });
 });
 
@@ -170,9 +174,30 @@ describe("readCodexLbUsageLimits", () => {
       expect(limits.unavailable).toBeUndefined();
       expect(limits.checkedAt).toBe(checkedAt);
       expect(limits.windows.map((window) => window.id)).toEqual([
-        "credits-7d",
-        "pool-accounts-weekly",
+        "clb.test:credits-7d",
+        "clb.test:pool-accounts-weekly",
       ]);
+    }),
+  );
+
+  it.effect("keeps two balancers on one host apart by path", () =>
+    Effect.gen(function* () {
+      const http = stubHttp(() => Response.json(POOL_ONLY));
+      const readAt = (url: string) =>
+        readCodexLbUsageLimits({
+          url,
+          apiKeyEnv: "CLB_KEY",
+          environment: { CLB_KEY: API_KEY },
+          checkedAt,
+        }).pipe(Effect.provide(http.layer));
+
+      const root = yield* readAt(URL_V1_USAGE);
+      const first = yield* readAt("https://clb.test/a/v1/usage");
+      const second = yield* readAt("https://clb.test/b/v1/usage/");
+
+      expect(root.windows[0]?.id).toBe("clb.test:credits-7d");
+      expect(first.windows[0]?.id).toBe("clb.test/a:credits-7d");
+      expect(second.windows[0]?.id).toBe("clb.test/b:credits-7d");
     }),
   );
 
@@ -273,8 +298,8 @@ describe("checkCodexProviderStatus with a usage limits URL", () => {
 
       expect(probes.map((probe) => probe.skipNativeUsage)).toEqual([true]);
       expect(status.usageLimits?.windows.map((window) => window.id)).toEqual([
-        "credits-7d",
-        "pool-accounts-weekly",
+        "clb.test:credits-7d",
+        "clb.test:pool-accounts-weekly",
       ]);
       expect(status.auth).toEqual({
         status: "authenticated",

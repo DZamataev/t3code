@@ -192,7 +192,8 @@ provider in `config.toml` names in `env_key`, so that variable must be in the in
 **Environment variables**. The instance then shows the balancer's credit windows, any limits of
 the key itself, and how much the pool's accounts have left, instead of the limits of the ChatGPT
 login in its Codex home. Because those limits belong to the balancer, the instance no longer
-counts as that login under **Usage → Limits**.
+counts as that login under **Usage → Limits**, and its windows get cards of their own there instead
+of being averaged with other Codex accounts.
 
 ## Connect a CLIProxyAPI hub
 
