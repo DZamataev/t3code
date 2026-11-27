@@ -633,6 +633,40 @@ it("a file picked after the phone composer collapses still attaches", async () =
   await expect.element(page.getByRole("img", { name: "picked.png" })).toBeVisible();
 });
 
+it("consecutive takes into the collapsed phone composer land at the caret", async () => {
+  const thread = threadWithHistory("thread-take", 1);
+  using _environment = installFakeEnvironment([thread]);
+  await page.viewport(390, 844);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+  );
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, { router: false });
+  const editor = page.getByTestId("composer-editor");
+  const answer = page.getByText(`Answer 0 for ${thread.id}.`);
+  await expect.element(answer).toBeVisible();
+  await userEvent.click(editor);
+  await userEvent.keyboard("left right{ArrowLeft}{ArrowLeft}{ArrowLeft}{ArrowLeft}{ArrowLeft}");
+  const take = page.getByRole("button", { name: "Take selection into composer as plain text" });
+
+  for (const source of [answer, page.getByText("ran the tests")]) {
+    // Selecting response text blurs the editor, which collapses the phone composer.
+    await userEvent.tripleClick(source);
+    await expect
+      .element(page.getByRole("button", { name: "Attach files" }))
+      .not.toBeInTheDocument();
+    await take.click();
+  }
+
+  await expect
+    .element(editor)
+    .toHaveTextContent(`left Answer 0 for ${thread.id}. ran the tests right`);
+});
+
 it("opens the thread actions menu for an older settled thread the shell leaves out", async () => {
   const thread = { ...threadWithHistory("older-settled", 1), olderSettled: true as const };
   using _environment = installFakeEnvironment([thread]);

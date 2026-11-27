@@ -2975,16 +2975,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (!canInsertComposerText) return false;
     const cursor = readComposerSnapshot().expandedCursor;
     const insertion = takeSelectionInsertion(promptRef.current, cursor, text);
-    if (
-      !insertion ||
-      !applyPromptReplacement(cursor, cursor, insertion.text, {
-        expandedCursorAfterReplace: insertion.cursorAfter,
-      })
-    ) {
-      return false;
-    }
+    if (!insertion) return false;
+    // Expanding focuses the end next frame; expand first so the insert's caret focus runs last.
     if (isComposerCollapsedMobile) expandMobileComposer();
-    return true;
+    return applyPromptReplacement(cursor, cursor, insertion.text, {
+      expandedCursorAfterReplace: insertion.cursorAfter,
+    });
   };
   const takeComposerTextStable = useStableCallback(takeComposerText);
 
