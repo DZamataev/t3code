@@ -20,6 +20,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as CodexClient from "effect-codex-app-server/client";
 import * as CodexSchema from "effect-codex-app-server/schema";
 import * as CodexErrors from "effect-codex-app-server/errors";
+import type { HttpClient } from "effect/http";
 
 import type {
   CodexSettings,
@@ -51,6 +52,7 @@ import {
 } from "@t3tools/provider-core/server/snapshotProbe";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { makeUnavailableUsageLimits } from "@t3tools/provider-core/server/usageLimits";
+import { readCodexLbUsageLimits } from "./codexLbUsageLimits.ts";
 import {
   codexRateLimitsFailureMessage,
   codexRateLimitsToLimits,
@@ -80,7 +82,10 @@ const CodexRoutingConfig = Schema.Struct({
   model_providers: Schema.optionalKey(
     Schema.Record(
       Schema.String,
-      Schema.Struct({ base_url: Schema.optionalKey(Schema.NullOr(Schema.String)) }),
+      Schema.Struct({
+        base_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        env_key: Schema.optionalKey(Schema.NullOr(Schema.String)),
+      }),
     ),
   ),
 });
@@ -107,6 +112,12 @@ function codexRouteBaseUrl(config: unknown): string | null | undefined {
   if (providerId === "openai") return routing.openai_base_url || null;
   const provider = routing.model_providers?.[providerId];
   return provider ? (provider.base_url ?? null) : undefined;
+}
+
+function codexRouteApiKeyEnv(config: unknown): string | undefined {
+  const routing = Option.getOrUndefined(decodeCodexRoutingConfig(config));
+  const providerId = routing?.model_provider ?? "openai";
+  return routing?.model_providers?.[providerId]?.env_key?.trim() || undefined;
 }
 
 function routesToNativeOpenai(config: unknown): boolean {
@@ -161,6 +172,7 @@ const CODEX_PRESENTATION = {
 export interface CodexAppServerProviderSnapshot {
   readonly account: CodexSchema.V2GetAccountResponse;
   readonly endpoint?: string | undefined;
+  readonly apiKeyEnv?: string | undefined;
   readonly nativeUsage?: boolean;
   readonly rateLimits?: CodexRateLimitsProbe;
   readonly version: string | undefined;
@@ -816,6 +828,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   return {
     account: accountResponse,
     endpoint: config ? codexCustomEndpoint(config) : undefined,
+    apiKeyEnv: config ? codexRouteApiKeyEnv(config) : undefined,
     nativeUsage,
     ...(rateLimits ? { rateLimits } : {}),
     version,
@@ -1033,9 +1046,13 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
 ): Effect.fn.Return<
   ServerProviderDraft,
   ServerSettingsError,
-  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+  | ChildProcessSpawner.ChildProcessSpawner
+  | FileSystem.FileSystem
+  | Path.Path
+  | HttpClient.HttpClient
 > {
   const resolvedEnvironment = providerProbeEnvironment(environment ?? process.env);
+  const usageLimitsUrl = managedAuth ? "" : codexSettings.usageLimitsUrl.trim();
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
   const emptyModels = emptyCodexModelsFromSettings(codexSettings);
 
@@ -1068,7 +1085,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     launchArgs: resolveCodexLaunchArgs(codexSettings.launchArgs, resolvedEnvironment),
     cwd: process.cwd(),
     environment: resolvedEnvironment,
-    ...(managedAuth ? { skipNativeUsage: true } : {}),
+    ...(managedAuth || usageLimitsUrl ? { skipNativeUsage: true } : {}),
   }).pipe(
     // Process teardown can outlast the work budget without discarding a completed snapshot.
     Effect.timeoutOption(Duration.millis(probeTimeoutMs)),
@@ -1126,7 +1143,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
   }
 
   const snapshot = probeResult.success.value;
-  const accountStatus = managedAuth
+  const probedAccountStatus = managedAuth
     ? { status: "ready" as const, auth: managedAuth, message: undefined }
     : accountProbeStatus(
         snapshot,
@@ -1134,9 +1151,21 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
           ? expandHomePath(codexSettings.homePath, yield* HostProcess.HomeDirectory)
           : undefined,
       );
+  // Usage → Limits merges instances by login, so the balancer's limits would replace those of
+  // another instance signed in to the same ChatGPT account that this one does not spend.
+  const { email: _email, workspaceId: _workspaceId, ...balancerAuth } = probedAccountStatus.auth;
+  const accountStatus = usageLimitsUrl
+    ? { ...probedAccountStatus, auth: balancerAuth }
+    : probedAccountStatus;
   // Sign-in guidance still applies when Codex itself says it needs an OpenAI login.
-  const usageLimits =
-    !snapshot.nativeUsage && !accountStatus.message
+  const usageLimits = usageLimitsUrl
+    ? yield* readCodexLbUsageLimits({
+        url: usageLimitsUrl,
+        apiKeyEnv: snapshot.apiKeyEnv,
+        environment: resolvedEnvironment,
+        checkedAt,
+      })
+    : !snapshot.nativeUsage && !accountStatus.message
       ? makeUnavailableUsageLimits({ checkedAt, reason: "unsupported" })
       : snapshot.rateLimits === undefined || "failure" in snapshot.rateLimits
         ? makeUnavailableUsageLimits({

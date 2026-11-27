@@ -250,7 +250,10 @@ export const CodexDriver: ProviderDriver<
         config: homeConfig,
       },
       {
-        onUsageLimits: (update) => snapshot.applyUsageLimits(update),
+        // Codex's own readings name the login's quota, which a codex-lb instance does not spend.
+        ...(config.usageLimitsUrl.trim()
+          ? {}
+          : { onUsageLimits: (update) => snapshot.applyUsageLimits(update) }),
         models: Effect.suspend(() => snapshot.getSnapshot).pipe(
           Effect.map((value) => value.models),
         ),
@@ -282,6 +285,7 @@ export const CodexDriver: ProviderDriver<
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, pathService),
+      Effect.provideService(HttpClient.HttpClient, httpClient),
     );
     const snapshotSettings = yield* makeProviderSnapshotSettingsSource(effectiveConfig);
     const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<CodexSettings>>({

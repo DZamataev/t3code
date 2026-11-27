@@ -767,6 +767,18 @@ export const CodexSettings = makeProviderSettingsSchema(
         description: "Additional CLI arguments passed to codex app-server on session start.",
       }),
     ),
+    usageLimitsUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Usage limits URL",
+        description:
+          "codex-lb usage endpoint that reports this instance's limits, read with the model provider's env_key API key. Leave empty to use the limits Codex reports.",
+        providerSettingsForm: {
+          placeholder: "https://host/v1/usage",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),

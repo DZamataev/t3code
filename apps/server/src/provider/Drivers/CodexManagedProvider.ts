@@ -132,7 +132,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
             undefined,
             effective.environment,
             managedAuth,
-          );
+          ).pipe(Effect.provideService(HttpClient.HttpClient, http));
           const credentials = yield* runtime.auth.access;
           // Another server can replace the saved profile while the native probe runs.
           // Never send that account's token with the launch profile's catalog labels.
